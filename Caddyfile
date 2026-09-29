@@ -1,0 +1,18 @@
+{
+    email support@cosmic135.com
+    on_demand_tls {
+        ask http://web:8000/api/domains/allow-certificate/
+    }
+}
+
+manager.cosmic135.com, go.cosmic135.com, *.go.cosmic135.com {
+    reverse_proxy web:8000
+}
+
+https:// {
+    tls {
+        on_demand
+    }
+    reverse_proxy web:8000
+}
+

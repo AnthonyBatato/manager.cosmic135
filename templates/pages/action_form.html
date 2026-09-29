@@ -1,0 +1,2 @@
+{% extends "base.html" %}{% load i18n %}{% block title %}{% trans "Map action" %} · Cosmic Launch{% endblock %}{% block content %}<header class="compact-header"><a href="{% url 'page_edit' page.pk %}" class="back">← {{ page.name }}</a><h1>{% trans "Map a page action" %}</h1><p>{% trans "Connect a button marker to Stripe, booking, a registration form, or an external checkout." %}</p></header><form method="post" class="panel form-panel">{% csrf_token %}{{ form.as_p }}<button class="button primary">{% trans "Save action" %}</button></form>{% endblock %}
+

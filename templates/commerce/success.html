@@ -1,0 +1,2 @@
+{% extends "base.html" %}{% block content %}<div class="public-message"><div class="success-mark">✓</div><p class="eyebrow">PAYMENT RECEIVED</p><h1>Thank you.</h1>{% if journey %}<p>Your place is secured. Complete the next step now so our team can prepare for you.</p><a class="button primary" href="{% url 'continue_journey' journey.token %}">Continue</a>{% else %}<p>Your payment is being confirmed. We will email your next step shortly.</p><button class="button secondary" onclick="location.reload()">Check again</button>{% endif %}</div>{% endblock %}
+
