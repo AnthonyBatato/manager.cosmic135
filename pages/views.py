@@ -55,6 +55,8 @@ def page_create(request):
         page.created_by = request.user
         page.save()
         messages.success(request, "Page created. Add the first version now.")
+        if page.source_type == LandingPage.SOURCE_UPLOAD:
+            return redirect("page_upload", pk=page.pk)
         return redirect("page_edit", pk=page.pk)
     return render(request, "pages/page_form.html", {"form": form})
 

@@ -11,6 +11,7 @@ from django.urls import reverse
 from users.models import ApprovedEmail
 from .models import ActionMapping, LandingPage
 from .services import save_archive_version, save_builder_version, validate_archive
+from .forms import PageForm
 
 def zip_upload(files):
     buffer = io.BytesIO()
@@ -35,6 +36,14 @@ class PageWorkflowTests(TestCase):
         self.client.post(reverse("page_publish", args=[page.pk]))
         page.refresh_from_db()
         self.assertTrue(page.is_published)
+
+    def test_starting_method_is_radio_and_upload_redirects_to_uploader(self):
+        self.assertEqual(PageForm().fields["source_type"].widget.__class__.__name__, "RadioSelect")
+        response = self.client.post(reverse("page_create"), {
+            "name": "Uploaded offer", "slug": "uploaded-offer", "source_type": LandingPage.SOURCE_UPLOAD,
+        })
+        page = LandingPage.objects.get(slug="uploaded-offer")
+        self.assertRedirects(response, reverse("page_upload", args=[page.pk]))
 
     def test_archive_validation_and_action_detection(self):
         upload = zip_upload({"index.html": '<a data-lpm-action="checkout">Buy</a>', "style.css": "body{}"})

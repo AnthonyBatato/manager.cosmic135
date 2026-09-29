@@ -6,6 +6,7 @@ class PageForm(forms.ModelForm):
     class Meta:
         model = LandingPage
         fields = ["name", "slug", "source_type"]
+        widgets = {"source_type": forms.RadioSelect}
 
 class BuilderForm(forms.Form):
     blocks_json = forms.CharField(widget=forms.HiddenInput)
