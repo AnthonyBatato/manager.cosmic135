@@ -69,7 +69,41 @@ def page_edit(request, pk):
         save_builder_version(page, form.cleaned_data["blocks_json"], request.user)
         messages.success(request, "A new immutable page version was saved.")
         return redirect("page_edit", pk=page.pk)
-    return render(request, "pages/page_edit.html", {"page": page, "form": form, "blocks_json": json.dumps(initial_blocks), "actions": page.actions.all()})
+    uploaded_source = ""
+    source_truncated = False
+    source_size = 0
+    if page.current_version and page.current_version.artifact_path:
+        try:
+            source_path = serve_file_path(page.current_version)
+            source_size = source_path.stat().st_size
+            preview_limit = 2 * 1024 * 1024
+            raw = source_path.read_bytes()[: preview_limit + 1]
+            source_truncated = len(raw) > preview_limit
+            uploaded_source = raw[:preview_limit].decode("utf-8", errors="replace")
+        except (FileNotFoundError, OSError):
+            messages.error(request, "The stored source file could not be read.")
+    return render(request, "pages/page_edit.html", {
+        "page": page, "form": form, "blocks_json": json.dumps(initial_blocks),
+        "actions": page.actions.all(), "uploaded_source": uploaded_source,
+        "source_truncated": source_truncated, "source_size": source_size,
+    })
+
+@login_required
+def page_source_download(request, pk):
+    page = get_object_or_404(LandingPage, pk=pk)
+    version = page.current_version
+    if not version or not version.artifact_path:
+        raise Http404
+    try:
+        target = serve_file_path(version)
+    except FileNotFoundError:
+        raise Http404
+    if not target.is_file():
+        raise Http404
+    return FileResponse(
+        target.open("rb"), content_type="text/html; charset=utf-8", as_attachment=True,
+        filename=f"{page.slug}-v{version.number}.html",
+    )
 
 @login_required
 def page_upload(request, pk):

@@ -6,6 +6,7 @@ urlpatterns = [
     path("pages/", views.page_list, name="page_list"),
     path("pages/new/", views.page_create, name="page_create"),
     path("pages/<int:pk>/", views.page_edit, name="page_edit"),
+    path("pages/<int:pk>/source/", views.page_source_download, name="page_source_download"),
     path("pages/<int:pk>/upload/", views.page_upload, name="page_upload"),
     path("pages/<int:pk>/preview/", views.page_preview, name="page_preview"),
     path("pages/<int:pk>/preview-assets/<path:path>", views.preview_asset, name="preview_asset"),

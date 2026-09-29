@@ -67,6 +67,12 @@ class PageWorkflowTests(TestCase):
         )
         version = save_uploaded_version(page, upload, self.user)
         self.assertTrue((Path(tempfile.gettempdir()) / "cosmic-launch-html-tests" / version.artifact_path / "index.html").exists())
+        editor = self.client.get(reverse("page_edit", args=[page.pk]))
+        self.assertContains(editor, "Uploaded code")
+        self.assertContains(editor, "&lt;h1&gt;Hello&lt;/h1&gt;", html=False)
+        download = self.client.get(reverse("page_source_download", args=[page.pk]))
+        self.assertEqual(download.status_code, 200)
+        self.assertIn(b"<h1>Hello</h1>", b"".join(download.streaming_content))
 
     def test_archive_rejects_path_traversal(self):
         upload = zip_upload({"index.html": "ok", "../escape.js": "bad"})
