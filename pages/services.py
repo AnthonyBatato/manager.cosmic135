@@ -21,6 +21,33 @@ DENIED_SUFFIXES = {".py", ".php", ".rb", ".pl", ".sh", ".bash", ".ps1", ".bat", 
 ALLOWED_SUFFIXES = {".html", ".htm", ".css", ".js", ".json", ".txt", ".xml", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2", ".ttf", ".otf", ".pdf"}
 ACTION_RE = re.compile(r'data-lpm-action=["\'](?P<kind>checkout|booking|form|external-checkout)(?::(?P<key>[a-z0-9-]+))?["\']', re.I)
 
+def _detect_actions(source):
+    actions = []
+    for match in ACTION_RE.finditer(source):
+        item = {"type": match.group("kind").lower(), "key": (match.group("key") or match.group("kind")).lower()}
+        if item not in actions:
+            actions.append(item)
+    return actions
+
+def validate_html_upload(upload):
+    if upload.size > MAX_ARCHIVE_BYTES:
+        raise ValidationError("HTML file exceeds 25 MB.")
+    suffix = Path(upload.name or "").suffix.lower()
+    if suffix not in {".html", ".htm", ".txt"}:
+        raise ValidationError("Upload a ZIP, HTML, HTM, or TXT file.")
+    try:
+        raw = upload.read()
+        upload.seek(0)
+        source = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValidationError("The page file must be UTF-8 text.") from exc
+    lowered = source.lower()
+    if "\x00" in source or "<html" not in lowered or "<body" not in lowered:
+        raise ValidationError("The file must contain a complete HTML document with html and body elements.")
+    if re.search(r"(?:src|href)\s*=\s*[\"'](?:/|file:|[a-z]:)", lowered):
+        raise ValidationError("Absolute local asset paths are not accepted. Embed assets or use HTTPS URLs.")
+    return source, _detect_actions(source)
+
 def validate_archive(upload):
     if upload.size > MAX_ARCHIVE_BYTES:
         raise ValidationError("Archive exceeds 25 MB.")
@@ -57,12 +84,33 @@ def validate_archive(upload):
     lowered = index_text.lower()
     if re.search(r"(?:src|href)\s*=\s*[\"'](?:/|file:|[a-z]:)", lowered):
         raise ValidationError("Use relative asset paths; absolute local paths are not accepted.")
-    actions = []
-    for match in ACTION_RE.finditer(index_text):
-        item = {"type": match.group("kind").lower(), "key": (match.group("key") or match.group("kind")).lower()}
-        if item not in actions:
-            actions.append(item)
-    return archive, members, actions
+    return archive, members, _detect_actions(index_text)
+
+def save_uploaded_version(page, upload, user):
+    if Path(upload.name or "").suffix.lower() == ".zip":
+        return save_archive_version(page, upload, user)
+    return save_html_version(page, upload, user)
+
+def save_html_version(page, upload, user):
+    source, actions = validate_html_upload(upload)
+    with transaction.atomic():
+        number = (page.versions.order_by("-number").values_list("number", flat=True).first() or 0) + 1
+        rel = Path(str(page.pk)) / f"{number}-{secrets.token_hex(6)}"
+        destination = settings.PUBLISHED_ROOT / rel
+        destination.mkdir(parents=True, exist_ok=False)
+        try:
+            (destination / "index.html").write_text(source, encoding="utf-8")
+            version = PageVersion.objects.create(
+                page=page, number=number, artifact_path=rel.as_posix(),
+                detected_actions=actions, created_by=user,
+            )
+            page.current_version = version
+            page.source_type = LandingPage.SOURCE_UPLOAD
+            page.save(update_fields=["current_version", "source_type", "updated_at"])
+            return version
+        except Exception:
+            shutil.rmtree(destination, ignore_errors=True)
+            raise
 
 def save_archive_version(page, upload, user):
     archive, members, actions = validate_archive(upload)

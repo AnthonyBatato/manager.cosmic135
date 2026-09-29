@@ -49,7 +49,11 @@ A private Django application for building and publishing landing pages, acceptin
 
 The owner can use Django admin at `/admin/` to manage approved emails, roles, offers, templates, reminder steps, hosts, calendars and booking types. Team-member access is permission-based and can be refined using Django groups.
 
-## Page ZIP format
+## Page upload formats
+
+For a self-contained AI-generated page, upload `.html`, `.htm`, or `.txt` directly. The file must contain a complete UTF-8 HTML document. Inline CSS and JavaScript, base64 images, and HTTPS-hosted assets are supported. This is suitable for single-file exports such as `Latest 413.txt`.
+
+For a page with separate image, CSS, JavaScript, or font files, use the ZIP format below.
 
 The archive must have exactly one root `index.html`. All assets must use relative paths. Server-side code, executables, symlinks, nested archives, absolute paths and traversal paths are rejected.
 

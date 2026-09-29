@@ -14,7 +14,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 from .forms import ActionMappingForm, BuilderForm, DomainForm, PageForm, UploadForm
 from .models import ActionClick, ActionMapping, Domain, LandingPage, Visit
-from .services import render_builder, save_archive_version, save_builder_version, serve_file_path
+from .services import render_builder, save_uploaded_version, save_builder_version, serve_file_path
 from users.auth import owner_required
 
 def _public_page_for_host(host):
@@ -77,11 +77,13 @@ def page_upload(request, pk):
     form = UploadForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
         try:
-            version = save_archive_version(page, form.cleaned_data["archive"], request.user)
+            version = save_uploaded_version(page, form.cleaned_data["archive"], request.user)
         except Exception as exc:
             form.add_error("archive", str(exc))
         else:
             messages.success(request, f"Version {version.number} uploaded and validated.")
+            if not version.detected_actions:
+                messages.warning(request, "No data-lpm-action markers were found. The page will work, but its existing links will not use tracked checkout, booking, or form actions.")
             return redirect("page_edit", pk=page.pk)
     return render(request, "pages/page_upload.html", {"page": page, "form": form})
 

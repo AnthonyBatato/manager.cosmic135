@@ -25,7 +25,11 @@ class BuilderForm(forms.Form):
         return blocks
 
 class UploadForm(forms.Form):
-    archive = forms.FileField(help_text="ZIP containing index.html and relative assets")
+    archive = forms.FileField(
+        label="Page file",
+        help_text="ZIP bundle, or a complete self-contained HTML/HTM/TXT file",
+        widget=forms.ClearableFileInput(attrs={"accept": ".zip,.html,.htm,.txt"}),
+    )
 
 class ActionMappingForm(forms.ModelForm):
     class Meta:

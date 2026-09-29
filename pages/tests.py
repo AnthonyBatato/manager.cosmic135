@@ -10,7 +10,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from users.models import ApprovedEmail
 from .models import ActionMapping, LandingPage
-from .services import save_archive_version, save_builder_version, validate_archive
+from .services import save_archive_version, save_builder_version, save_uploaded_version, validate_archive, validate_html_upload
 from .forms import PageForm
 
 def zip_upload(files):
@@ -49,6 +49,24 @@ class PageWorkflowTests(TestCase):
         upload = zip_upload({"index.html": '<a data-lpm-action="checkout">Buy</a>', "style.css": "body{}"})
         _, _, actions = validate_archive(upload)
         self.assertEqual(actions, [{"type": "checkout", "key": "checkout"}])
+
+    def test_self_contained_txt_html_is_accepted(self):
+        upload = SimpleUploadedFile(
+            "ai-page.txt",
+            b'<!doctype html><html><body><a data-lpm-action="external-checkout">Buy</a></body></html>',
+            content_type="text/plain",
+        )
+        _, actions = validate_html_upload(upload)
+        self.assertEqual(actions, [{"type": "external-checkout", "key": "external-checkout"}])
+
+    @override_settings(PUBLISHED_ROOT=Path(tempfile.gettempdir()) / "cosmic-launch-html-tests")
+    def test_self_contained_txt_creates_version(self):
+        page = LandingPage.objects.create(name="Single file", slug="single-file", created_by=self.user)
+        upload = SimpleUploadedFile(
+            "page.txt", b"<!doctype html><html><body><h1>Hello</h1></body></html>", content_type="text/plain",
+        )
+        version = save_uploaded_version(page, upload, self.user)
+        self.assertTrue((Path(tempfile.gettempdir()) / "cosmic-launch-html-tests" / version.artifact_path / "index.html").exists())
 
     def test_archive_rejects_path_traversal(self):
         upload = zip_upload({"index.html": "ok", "../escape.js": "bad"})
