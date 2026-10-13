@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "Domain setup" %} · Cosmic Launch{% endblock %}
+{% block content %}
+<header class="compact-header domain-header">
+  <a href="{% url 'page_edit' page.pk %}" class="back">← {{ page.name }}</a>
+  <div class="title-row"><h1>{% trans "Connect your domain" %}</h1><span class="status {% if domain.status == 'verified' %}live{% endif %}">{% if domain.status == 'verified' %}{% trans "Connected" %}{% else %}{% trans "Pending DNS" %}{% endif %}</span></div>
+  <p>{{ domain.hostname }}</p>
+</header>
+<section class="panel domain-panel">
+  {% if domain.status == 'verified' %}
+    <div class="domain-success"><span>✓</span><div><h2>{% trans "Your domain is connected" %}</h2><p>{% trans "HTTPS is issued automatically. Your published landing page is available at:" %}</p><a href="https://{{ domain.hostname }}" target="_blank" rel="noopener">https://{{ domain.hostname }}</a></div></div>
+  {% else %}
+    <p class="eyebrow">{% trans "EXABYTES DNS SETUP" %}</p><h2>{% trans "Add this CNAME record" %}</h2>
+    <p class="muted">{% trans "Open your domain's DNS management page at Exabytes, add the record below, and save it." %}</p>
+    <div class="dns-record" role="table" aria-label="CNAME record">
+      <div><small>{% trans "Type" %}</small><strong>CNAME</strong></div>
+      <div><small>{% trans "Name / Host" %}</small><strong>{{ dns_record_name }}</strong></div>
+      <div><small>{% trans "Value / Points to" %}</small><strong>{{ cname_target }}</strong></div>
+      <button type="button" class="button secondary" data-copy="{{ cname_target }}">{% trans "Copy value" %}</button>
+    </div>
+    <div class="domain-note"><strong>{% trans "Exabytes may shorten the Name field." %}</strong><p>{% blocktrans %}If your domain is example.com and you are connecting promo.example.com, enter promo as the Name. Keep DNS proxying disabled while connecting.{% endblocktrans %}</p></div>
+    <form method="post" action="{% url 'domain_verify' page.pk domain.pk %}" class="verify-domain-form">{% csrf_token %}<button class="button primary">{% trans "Verify connection" %}</button><small>{% trans "DNS updates can take a few minutes or, occasionally, up to 24 hours." %}</small></form>
+    <details class="txt-fallback"><summary>{% trans "Cannot use a CNAME? Verify ownership with TXT" %}</summary><p class="muted">{% trans "Some root domains require an ALIAS/ANAME record. Point it to the same value, then add this TXT record for verification:" %}</p><pre><code>TXT _cosmic-verify.{{ domain.hostname }} = {{ domain.verification_token }}</code></pre></details>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}<script>document.querySelectorAll('[data-copy]').forEach(function(button){button.addEventListener('click',async function(){await navigator.clipboard.writeText(this.dataset.copy);this.textContent='{% trans "Copied" %}';});});</script>{% endblock %}

@@ -276,27 +276,47 @@ def domain_create(request, pk):
         domain.page = page
         domain.hostname = domain.hostname.lower().rstrip(".")
         domain.save()
-        messages.success(request, "Domain added. Create the shown DNS record, then verify it in Django admin.")
-        return redirect("page_edit", pk=page.pk)
+        messages.success(request, "Domain added. Add the CNAME record shown below, then verify it.")
+        return redirect("domain_setup", pk=page.pk, domain_pk=domain.pk)
     return render(request, "pages/domain_form.html", {"page": page, "form": form})
+
+@owner_required
+def domain_setup(request, pk, domain_pk):
+    page = get_object_or_404(LandingPage, pk=pk)
+    domain = get_object_or_404(Domain, pk=domain_pk, page=page)
+    return render(request, "pages/domain_setup.html", {
+        "page": page,
+        "domain": domain,
+        "cname_target": settings.CUSTOM_DOMAIN_CNAME_TARGET,
+        "dns_record_name": domain.hostname,
+    })
 
 @owner_required
 @require_POST
 def domain_verify(request, pk, domain_pk):
     page = get_object_or_404(LandingPage, pk=pk)
     domain = get_object_or_404(Domain, pk=domain_pk, page=page)
+    cname_targets = set()
+    try:
+        answers = dns.resolver.resolve(domain.hostname, "CNAME")
+        cname_targets = {str(answer.target).lower().rstrip(".") for answer in answers}
+    except Exception:
+        pass
+    txt_values = set()
     try:
         answers = dns.resolver.resolve(f"_cosmic-verify.{domain.hostname}", "TXT")
-        values = {part.decode() for answer in answers for part in answer.strings}
+        txt_values = {part.decode() for answer in answers for part in answer.strings}
     except Exception:
-        values = set()
-    if domain.verification_token in values:
+        pass
+    cname_verified = settings.CUSTOM_DOMAIN_CNAME_TARGET in cname_targets
+    txt_verified = domain.verification_token in txt_values
+    if cname_verified or txt_verified:
         domain.status = Domain.STATUS_VERIFIED
         domain.save(update_fields=["status"])
         messages.success(request, "Domain verified and ready for HTTPS.")
     else:
-        messages.error(request, "Verification TXT record was not found yet.")
-    return redirect("page_edit", pk=pk)
+        messages.error(request, f"CNAME was not found yet. It must point to {settings.CUSTOM_DOMAIN_CNAME_TARGET}.")
+    return redirect("domain_setup", pk=pk, domain_pk=domain.pk)
 
 def public_asset(request, page_slug, path):
     page = get_object_or_404(LandingPage, slug=page_slug, is_published=True)

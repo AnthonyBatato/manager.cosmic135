@@ -6,7 +6,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-secret-change-before-production-0123456789-abcdef")
 DEBUG = os.getenv("DEBUG", "0") == "1"
-ALLOWED_HOSTS = [x.strip() for x in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,.localhost").split(",") if x.strip()]
+# Django's static host validation cannot include domains added later through the
+# manager. HostRoutingMiddleware checks both these hosts and verified domains.
+ROUTING_ALLOWED_HOSTS = [x.strip().lower() for x in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,.localhost").split(",") if x.strip()]
+ALLOWED_HOSTS = ["*"]
 CSRF_TRUSTED_ORIGINS = [x.strip() for x in os.getenv("CSRF_TRUSTED_ORIGINS", "http://localhost:8000").split(",") if x.strip()]
 
 INSTALLED_APPS = [
@@ -18,6 +21,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "pages.middleware.HostRoutingMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -28,7 +32,6 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "pages.middleware.HostRoutingMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -121,6 +124,7 @@ CELERY_BEAT_SCHEDULE = {
 MANAGER_HOST = os.getenv("MANAGER_HOST", "manager.cosmic135.com")
 PUBLIC_ROOT_HOST = os.getenv("PUBLIC_ROOT_HOST", "go.cosmic135.com")
 PREVIEW_HOST = os.getenv("PREVIEW_HOST", "preview.go.cosmic135.com")
+CUSTOM_DOMAIN_CNAME_TARGET = os.getenv("CUSTOM_DOMAIN_CNAME_TARGET", PUBLIC_ROOT_HOST).lower().rstrip(".")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 OPENAI_CONVERSIONS_API_KEY = os.getenv("OPENAI_CONVERSIONS_API_KEY", "")

@@ -2,6 +2,7 @@ import io
 import json
 import tempfile
 import zipfile
+from unittest.mock import Mock, patch
 from pathlib import Path
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -9,7 +10,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from users.models import ApprovedEmail
-from .models import ActionMapping, AdTrackingSettings, LandingPage
+from .models import ActionMapping, AdTrackingSettings, Domain, LandingPage
 from .services import save_archive_version, save_builder_version, save_uploaded_version, validate_archive, validate_html_upload
 from .forms import PageForm
 
@@ -128,6 +129,50 @@ class PageWorkflowTests(TestCase):
         self.client.force_login(team)
         response = self.client.get(reverse("tracking_settings", args=[page.pk]))
         self.assertEqual(response.status_code, 302)
+
+    def test_custom_domain_creation_shows_cname_setup(self):
+        page = LandingPage.objects.create(name="Offer", slug="domain-offer", created_by=self.user)
+        response = self.client.post(reverse("domain_create", args=[page.pk]), {
+            "hostname": "Promo.Example.com.",
+        })
+        domain = Domain.objects.get(page=page)
+        self.assertEqual(domain.hostname, "promo.example.com")
+        self.assertRedirects(response, reverse("domain_setup", args=[page.pk, domain.pk]))
+        setup = self.client.get(reverse("domain_setup", args=[page.pk, domain.pk]))
+        self.assertContains(setup, "CNAME")
+        self.assertContains(setup, "go.cosmic135.com")
+
+    @override_settings(CUSTOM_DOMAIN_CNAME_TARGET="go.cosmic135.com")
+    @patch("pages.views.dns.resolver.resolve")
+    def test_custom_domain_verifies_from_cname(self, resolve):
+        page = LandingPage.objects.create(name="Offer", slug="verify-offer", created_by=self.user)
+        domain = Domain.objects.create(page=page, hostname="promo.example.com")
+        cname_answer = Mock()
+        cname_answer.target = "go.cosmic135.com."
+        resolve.side_effect = [[cname_answer], Exception("no txt")]
+        response = self.client.post(reverse("domain_verify", args=[page.pk, domain.pk]))
+        domain.refresh_from_db()
+        self.assertEqual(domain.status, Domain.STATUS_VERIFIED)
+        self.assertRedirects(response, reverse("domain_setup", args=[page.pk, domain.pk]))
+
+    @override_settings(DEBUG=True)
+    def test_verified_custom_domain_serves_published_page(self):
+        page = LandingPage.objects.create(name="Branded", slug="branded", created_by=self.user)
+        version = save_builder_version(page, [{"type": "hero", "title": "Branded page", "body": "Ready"}], self.user)
+        page.published_version = version
+        page.is_published = True
+        page.save(update_fields=["published_version", "is_published"])
+        Domain.objects.create(page=page, hostname="promo.example.com", status=Domain.STATUS_VERIFIED)
+        response = self.client.get("/", HTTP_HOST="promo.example.com")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Branded page")
+
+    @override_settings(DEBUG=True)
+    def test_unverified_custom_domain_is_rejected(self):
+        page = LandingPage.objects.create(name="Pending", slug="pending-domain", created_by=self.user)
+        Domain.objects.create(page=page, hostname="pending.example.com")
+        response = self.client.get("/", HTTP_HOST="pending.example.com")
+        self.assertEqual(response.status_code, 400)
 
     @override_settings(DEBUG=True)
     def test_published_page_injects_page_specific_pixels_but_preview_does_not(self):

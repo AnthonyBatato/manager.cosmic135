@@ -153,3 +153,84 @@ msgid "Browser pixel"
 msgstr "浏览器 Pixel"
 msgid "Tracking runs on the published page after consent and is disabled in previews."
 msgstr "追踪会在访客同意后于已发布页面运行，并在预览中停用。"
+
+msgid "Enter a hostname only, without https://, a path, or a port."
+msgstr "只请输入主机名，不要包含 https://、路径或端口。"
+
+msgid "Enter a valid domain such as promo.example.com."
+msgstr "请输入有效域名，例如 promo.example.com。"
+
+msgid "Enter the domain you want visitors to use. We will give you the CNAME record to add at Exabytes or another DNS provider."
+msgstr "输入您希望访客使用的域名。系统会提供需要在 Exabytes 或其他 DNS 服务商添加的 CNAME 记录。"
+
+msgid "Example: promo.yourdomain.com — do not include https:// or a page path."
+msgstr "例如：promo.yourdomain.com — 不要包含 https:// 或页面路径。"
+
+msgid "Continue to DNS setup"
+msgstr "继续设置 DNS"
+
+msgid "DNS setup required"
+msgstr "需要设置 DNS"
+
+msgid "Connected"
+msgstr "已连接"
+
+msgid "Pending"
+msgstr "等待中"
+
+msgid "Use your own branded URL for this page."
+msgstr "为此页面使用您自己的品牌网址。"
+
+msgid "Domain setup"
+msgstr "域名设置"
+
+msgid "Connect your domain"
+msgstr "连接您的域名"
+
+msgid "Pending DNS"
+msgstr "等待 DNS"
+
+msgid "Your domain is connected"
+msgstr "您的域名已连接"
+
+msgid "HTTPS is issued automatically. Your published landing page is available at:"
+msgstr "HTTPS 证书会自动签发。已发布的落地页网址是："
+
+msgid "EXABYTES DNS SETUP"
+msgstr "EXABYTES DNS 设置"
+
+msgid "Add this CNAME record"
+msgstr "添加此 CNAME 记录"
+
+msgid "Open your domain's DNS management page at Exabytes, add the record below, and save it."
+msgstr "在 Exabytes 打开域名的 DNS 管理页面，添加以下记录并保存。"
+
+msgid "Type"
+msgstr "类型"
+
+msgid "Name / Host"
+msgstr "名称 / 主机"
+
+msgid "Value / Points to"
+msgstr "值 / 指向"
+
+msgid "Copy value"
+msgstr "复制值"
+
+msgid "Exabytes may shorten the Name field."
+msgstr "Exabytes 可能会缩短名称字段。"
+
+msgid "If your domain is example.com and you are connecting promo.example.com, enter promo as the Name. Keep DNS proxying disabled while connecting."
+msgstr "如果您的域名是 example.com，并要连接 promo.example.com，请在名称中输入 promo。连接期间请关闭 DNS 代理。"
+
+msgid "Verify connection"
+msgstr "验证连接"
+
+msgid "DNS updates can take a few minutes or, occasionally, up to 24 hours."
+msgstr "DNS 更新通常需要几分钟，偶尔可能需要长达 24 小时。"
+
+msgid "Cannot use a CNAME? Verify ownership with TXT"
+msgstr "无法使用 CNAME？通过 TXT 验证所有权"
+
+msgid "Some root domains require an ALIAS/ANAME record. Point it to the same value, then add this TXT record for verification:"
+msgstr "部分根域名需要 ALIAS/ANAME 记录。请将其指向相同的值，然后添加此 TXT 记录进行验证："

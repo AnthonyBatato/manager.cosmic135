@@ -16,6 +16,7 @@ urlpatterns = [
     path("pages/<int:pk>/publish/", views.page_publish, name="page_publish"),
     path("pages/<int:pk>/actions/new/", views.action_create, name="action_create"),
     path("pages/<int:pk>/domains/new/", views.domain_create, name="domain_create"),
+    path("pages/<int:pk>/domains/<int:domain_pk>/", views.domain_setup, name="domain_setup"),
     path("pages/<int:pk>/domains/<int:domain_pk>/verify/", views.domain_verify, name="domain_verify"),
     path("pages/<int:pk>/rollback/<int:version>/", views.page_rollback, name="page_rollback"),
     path("p/<slug:slug>/", views.local_public_page, name="local_public_page"),

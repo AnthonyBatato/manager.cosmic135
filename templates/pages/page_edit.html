@@ -37,7 +37,7 @@
     {% for action in actions %}<div class="version-item"><span><strong>{{ action.label }}</strong><small>{{ action.key }} · {{ action.action_type }}</small></span></div>{% empty %}<p class="muted">{% trans "Map every checkout, booking, or form button before publishing." %}</p>{% endfor %}
     <hr>
     <p class="eyebrow">{% trans "DOMAINS" %}</p>
-    {% for domain in page.domains.all %}<div class="version-item"><span><strong>{{ domain.hostname }}</strong><small>TXT _cosmic-verify.{{ domain.hostname }} = {{ domain.verification_token }}</small></span>{% if domain.status == 'verified' %}<span class="status live">{% trans "Verified" %}</span>{% else %}<form method="post" action="{% url 'domain_verify' page.pk domain.pk %}">{% csrf_token %}<button class="text-button">{% trans "Verify" %}</button></form>{% endif %}</div>{% endfor %}
+    {% for domain in page.domains.all %}<a class="version-item domain-link" href="{% url 'domain_setup' page.pk domain.pk %}"><span><strong>{{ domain.hostname }}</strong><small>{% if domain.status == 'verified' %}https://{{ domain.hostname }}{% else %}{% trans "DNS setup required" %}{% endif %}</small></span><span class="status {% if domain.status == 'verified' %}live{% endif %}">{% if domain.status == 'verified' %}{% trans "Connected" %}{% else %}{% trans "Pending" %}{% endif %}</span></a>{% empty %}<p class="muted">{% trans "Use your own branded URL for this page." %}</p>{% endfor %}
     <a class="button secondary full" href="{% url 'domain_create' page.pk %}">{% trans "Connect custom domain" %}</a>
   </aside>
 </div>

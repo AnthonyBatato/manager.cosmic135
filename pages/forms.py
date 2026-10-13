@@ -1,4 +1,6 @@
 import json
+import re
+
 from django import forms
 from django.utils.translation import gettext_lazy as _
 from .models import ActionMapping, AdTrackingSettings, Domain, LandingPage
@@ -42,6 +44,18 @@ class DomainForm(forms.ModelForm):
     class Meta:
         model = Domain
         fields = ["hostname"]
+
+    def clean_hostname(self):
+        hostname = self.cleaned_data["hostname"].strip().lower().rstrip(".")
+        if "://" in hostname or "/" in hostname or ":" in hostname:
+            raise forms.ValidationError(_("Enter a hostname only, without https://, a path, or a port."))
+        labels = hostname.split(".")
+        if len(labels) < 2 or any(
+            not label or len(label) > 63 or not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", label)
+            for label in labels
+        ):
+            raise forms.ValidationError(_("Enter a valid domain such as promo.example.com."))
+        return hostname
 
 class AdTrackingSettingsForm(forms.ModelForm):
     class Meta:
