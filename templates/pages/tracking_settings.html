@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "Ads tracking" %} · Cosmic Launch{% endblock %}
+{% block content %}
+<header class="topbar tracking-header">
+  <div><a href="{% url 'page_edit' page.pk %}" class="back">← {{ page.name }}</a><p class="eyebrow">{% trans "MEASUREMENT" %}</p><h1>{% trans "Ads tracking" %}</h1><p>{% trans "These identifiers apply only to this landing page." %} <strong>{{ page.slug }}.go.cosmic135.com</strong></p></div>
+</header>
+
+<form method="post" class="tracking-form">
+  {% csrf_token %}
+  {{ form.non_field_errors }}
+  <section class="tracking-grid">
+    <article class="panel tracking-card">
+      <div class="tracking-brand meta-brand"><span>f</span><div><h2>Meta Pixel</h2><p>{% trans "Facebook and Instagram advertising" %}</p></div></div>
+      <label class="switch-row">{{ form.meta_enabled }}<span>{% trans "Enable Meta Pixel" %}</span></label>
+      <label>{{ form.meta_pixel_id.label }}{{ form.meta_pixel_id }}<small>{{ form.meta_pixel_id.help_text }}</small>{{ form.meta_pixel_id.errors }}</label>
+      <div class="integration-status"><span class="status {% if server_integrations.meta %}live{% endif %}">{% if server_integrations.meta %}{% trans "Server key configured" %}{% else %}{% trans "Browser tracking only" %}{% endif %}</span></div>
+    </article>
+
+    <article class="panel tracking-card">
+      <div class="tracking-brand google-brand"><span>G</span><div><h2>Google Ads</h2><p>{% trans "Google advertising conversions" %}</p></div></div>
+      <label class="switch-row">{{ form.google_ads_enabled }}<span>{% trans "Enable Google Ads tracking" %}</span></label>
+      <label>{{ form.google_ads_id.label }}{{ form.google_ads_id }}<small>{{ form.google_ads_id.help_text }}</small>{{ form.google_ads_id.errors }}</label>
+      <label>{{ form.google_ads_conversion_label.label }}{{ form.google_ads_conversion_label }}<small>{{ form.google_ads_conversion_label.help_text }}</small>{{ form.google_ads_conversion_label.errors }}</label>
+    </article>
+
+    <article class="panel tracking-card">
+      <div class="tracking-brand openai-brand"><span>◎</span><div><h2>OpenAI / ChatGPT Ads</h2><p>{% trans "ChatGPT advertising conversions" %}</p></div></div>
+      <label class="switch-row">{{ form.openai_enabled }}<span>{% trans "Enable OpenAI / ChatGPT Ads Pixel" %}</span></label>
+      <label>{{ form.openai_pixel_id.label }}{{ form.openai_pixel_id }}<small>{{ form.openai_pixel_id.help_text }}</small>{{ form.openai_pixel_id.errors }}</label>
+      <div class="integration-status"><span class="status {% if server_integrations.openai %}live{% endif %}">{% if server_integrations.openai %}{% trans "Conversions API key configured" %}{% else %}{% trans "Conversions API key not configured" %}{% endif %}</span></div>
+    </article>
+  </section>
+
+  <section class="panel consent-panel">
+    <div><p class="eyebrow">{% trans "PRIVACY" %}</p><h2>{% trans "Visitor consent" %}</h2><p class="muted">{% trans "Keep this enabled when your visitors must consent before advertising measurement begins." %}</p></div>
+    <label class="switch-row">{{ form.require_consent }}<span>{% trans "Wait for visitor consent before browser tracking" %}</span></label>
+  </section>
+
+  <div class="settings-actions"><button class="button primary">{% trans "Save tracking settings" %}</button><a class="button secondary" href="/admin/">{% trans "Open advanced admin" %}</a></div>
+</form>
+{% endblock %}

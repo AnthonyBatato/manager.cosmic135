@@ -1,5 +1,6 @@
 import secrets
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
 from django.utils import timezone
@@ -76,4 +77,37 @@ class ActionClick(models.Model):
     action = models.ForeignKey(ActionMapping, on_delete=models.CASCADE)
     session_key = models.CharField(max_length=64, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+class AdTrackingSettings(models.Model):
+    """Per-page tracking identifiers; API secrets stay in the environment."""
+    page = models.OneToOneField(LandingPage, on_delete=models.CASCADE, related_name="tracking_settings")
+    meta_enabled = models.BooleanField(default=False)
+    meta_pixel_id = models.CharField(max_length=120, blank=True)
+    google_ads_enabled = models.BooleanField(default=False)
+    google_ads_id = models.CharField(max_length=120, blank=True)
+    google_ads_conversion_label = models.CharField(max_length=160, blank=True)
+    openai_enabled = models.BooleanField(default=False)
+    openai_pixel_id = models.CharField(max_length=120, blank=True)
+    require_consent = models.BooleanField(default=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "ads tracking settings"
+        verbose_name_plural = "ads tracking settings"
+
+    def clean(self):
+        errors = {}
+        for enabled_field, id_field, label in [
+            ("meta_enabled", "meta_pixel_id", "Meta Pixel ID"),
+            ("google_ads_enabled", "google_ads_id", "Google Ads ID"),
+            ("openai_enabled", "openai_pixel_id", "OpenAI Pixel ID"),
+        ]:
+            if getattr(self, enabled_field) and not getattr(self, id_field).strip():
+                errors[id_field] = f"Enter a {label} before enabling this integration."
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"Ads tracking for {self.page.name}"
 

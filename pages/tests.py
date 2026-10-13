@@ -9,7 +9,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from users.models import ApprovedEmail
-from .models import ActionMapping, LandingPage
+from .models import ActionMapping, AdTrackingSettings, LandingPage
 from .services import save_archive_version, save_builder_version, save_uploaded_version, validate_archive, validate_html_upload
 from .forms import PageForm
 
@@ -90,4 +90,42 @@ class PageWorkflowTests(TestCase):
         version = save_archive_version(page, zip_upload({"index.html": "<h1>Hello</h1>"}), self.user)
         self.assertEqual(version.number, 1)
         self.assertTrue((Path(tempfile.gettempdir()) / "cosmic-launch-tests" / version.artifact_path / "index.html").exists())
+
+    @override_settings(OPENAI_CONVERSIONS_API_KEY="server-only-secret")
+    def test_owner_saves_page_specific_tracking_settings(self):
+        first = LandingPage.objects.create(name="First", slug="first", created_by=self.user)
+        second = LandingPage.objects.create(name="Second", slug="second", created_by=self.user)
+        response = self.client.post(reverse("tracking_settings", args=[first.pk]), {
+            "meta_enabled": "on",
+            "meta_pixel_id": "123456789",
+            "google_ads_enabled": "on",
+            "google_ads_id": "AW-987654321",
+            "google_ads_conversion_label": "PurchaseLabel",
+            "openai_enabled": "on",
+            "openai_pixel_id": "134534",
+            "require_consent": "on",
+        })
+        self.assertRedirects(response, reverse("tracking_settings", args=[first.pk]))
+        tracking = AdTrackingSettings.objects.get(page=first)
+        self.assertEqual(tracking.openai_pixel_id, "134534")
+        self.assertTrue(tracking.require_consent)
+        self.assertFalse(AdTrackingSettings.objects.filter(page=second).exists())
+        page = self.client.get(reverse("tracking_settings", args=[first.pk]))
+        self.assertContains(page, "Conversions API key configured")
+        self.assertNotContains(page, "server-only-secret")
+
+    def test_tracking_requires_id_when_enabled(self):
+        page = LandingPage.objects.create(name="Offer", slug="tracked-offer", created_by=self.user)
+        response = self.client.post(reverse("tracking_settings", args=[page.pk]), {"openai_enabled": "on"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Enter a OpenAI Pixel ID")
+        self.assertFalse(AdTrackingSettings.objects.filter(page=page).exists())
+
+    def test_team_member_cannot_change_tracking_settings(self):
+        page = LandingPage.objects.create(name="Offer", slug="owner-only", created_by=self.user)
+        team = get_user_model().objects.create_user("team@example.com", "team@example.com", "testpass123")
+        ApprovedEmail.objects.create(email=team.email, role="team")
+        self.client.force_login(team)
+        response = self.client.get(reverse("tracking_settings", args=[page.pk]))
+        self.assertEqual(response.status_code, 302)
 

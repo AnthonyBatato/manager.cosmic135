@@ -12,8 +12,8 @@ from django.core import signing
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
-from .forms import ActionMappingForm, BuilderForm, DomainForm, PageForm, UploadForm
-from .models import ActionClick, ActionMapping, Domain, LandingPage, Visit
+from .forms import ActionMappingForm, AdTrackingSettingsForm, BuilderForm, DomainForm, PageForm, UploadForm
+from .models import ActionClick, ActionMapping, AdTrackingSettings, Domain, LandingPage, Visit
 from .services import render_builder, save_uploaded_version, save_builder_version, serve_file_path
 from users.auth import owner_required
 
@@ -42,6 +42,25 @@ def home(request):
     }
     pages = LandingPage.objects.annotate(visit_count=Count("visits"), click_count=Count("clicks", distinct=True)).order_by("-updated_at")[:6]
     return render(request, "dashboard.html", {"stats": stats, "pages": pages})
+
+@owner_required
+def tracking_settings(request, pk):
+    page = get_object_or_404(LandingPage, pk=pk)
+    tracking = AdTrackingSettings.objects.filter(page=page).first() or AdTrackingSettings(page=page)
+    form = AdTrackingSettingsForm(request.POST or None, instance=tracking)
+    if request.method == "POST" and form.is_valid():
+        tracking = form.save(commit=False)
+        tracking.updated_by = request.user
+        tracking.save()
+        messages.success(request, "Ads tracking settings were saved.")
+        return redirect("tracking_settings", pk=page.pk)
+    server_integrations = {
+        "openai": bool(settings.OPENAI_CONVERSIONS_API_KEY),
+        "meta": bool(settings.META_CONVERSIONS_API_TOKEN),
+    }
+    return render(request, "pages/tracking_settings.html", {
+        "page": page, "form": form, "tracking": tracking, "server_integrations": server_integrations,
+    })
 
 @login_required
 def page_list(request):

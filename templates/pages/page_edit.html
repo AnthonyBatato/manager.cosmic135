@@ -9,6 +9,7 @@
     <p>{{ page.slug }}.go.cosmic135.com · {% trans "Current" %} v{{ page.current_version.number|default:'—' }}</p>
   </div>
   <div class="button-row">
+    {% if IS_OWNER %}<a class="button secondary" href="{% url 'tracking_settings' page.pk %}">{% trans "Ads tracking" %}</a>{% endif %}
     <a class="button secondary" href="{% url 'page_preview' page.pk %}" target="_blank">{% trans "Preview" %}</a>
     <a class="button secondary" href="{% url 'page_upload' page.pk %}">{% trans "Upload code" %}</a>
     <form method="post" action="{% url 'page_publish' page.pk %}">{% csrf_token %}<button class="button primary">{% trans "Publish" %}</button></form>
