@@ -48,6 +48,22 @@ class Domain(models.Model):
     verification_token = models.CharField(max_length=64, default=domain_token)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def __str__(self):
+        return self.hostname
+
+class DomainRoute(models.Model):
+    domain = models.ForeignKey(Domain, on_delete=models.CASCADE, related_name="routes")
+    page = models.ForeignKey(LandingPage, on_delete=models.CASCADE, related_name="domain_routes")
+    path = models.SlugField(max_length=100, validators=[slug_validator])
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["domain", "path"], name="unique_domain_route_path")]
+        ordering = ["path"]
+
+    def __str__(self):
+        return f"{self.domain.hostname}/{self.path}/"
+
 class ActionMapping(models.Model):
     ACTION_CHECKOUT = "checkout"
     ACTION_BOOKING = "booking"

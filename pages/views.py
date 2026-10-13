@@ -6,14 +6,15 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.core import signing
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
-from .forms import ActionMappingForm, AdTrackingSettingsForm, BuilderForm, DomainForm, PageForm, UploadForm
-from .models import ActionClick, ActionMapping, AdTrackingSettings, Domain, LandingPage, Visit
+from .forms import ActionMappingForm, AdTrackingSettingsForm, BuilderForm, DomainForm, DomainRouteForm, PageForm, UploadForm
+from .models import ActionClick, ActionMapping, AdTrackingSettings, Domain, DomainRoute, LandingPage, Visit
 from .services import render_builder, save_uploaded_version, save_builder_version, serve_file_path
 from .tracking import inject_tracking
 from users.auth import owner_required
@@ -172,7 +173,7 @@ def page_rollback(request, pk, version):
     messages.success(request, f"Rolled back to version {version}.")
     return redirect("page_edit", pk=pk)
 
-def render_public_page(request, page, preview=False, local=False, preview_token=None):
+def render_public_page(request, page, preview=False, local=False, preview_token=None, asset_base_url=None):
     version = page.current_version if preview else page.published_version
     if not version:
         raise Http404
@@ -186,7 +187,9 @@ def render_public_page(request, page, preview=False, local=False, preview_token=
         path = serve_file_path(version)
         if not path.exists(): raise Http404
         source = path.read_text(encoding="utf-8")
-        if preview_token:
+        if asset_base_url:
+            base_url = asset_base_url
+        elif preview_token:
             base_url = reverse("public_preview_asset", kwargs={"pk": page.pk, "token": preview_token, "path": "__asset__"}).replace("__asset__", "")
         elif preview:
             base_url = reverse("preview_asset", kwargs={"pk": page.pk, "path": "__asset__"}).replace("__asset__", "")
@@ -289,7 +292,43 @@ def domain_setup(request, pk, domain_pk):
         "domain": domain,
         "cname_target": settings.CUSTOM_DOMAIN_CNAME_TARGET,
         "dns_record_name": domain.hostname,
+        "route_form": DomainRouteForm(),
     })
+
+@owner_required
+@require_POST
+def domain_route_create(request, pk, domain_pk):
+    page = get_object_or_404(LandingPage, pk=pk)
+    domain = get_object_or_404(Domain, pk=domain_pk, page=page)
+    form = DomainRouteForm(request.POST)
+    if form.is_valid():
+        route = form.save(commit=False)
+        route.domain = domain
+        try:
+            with transaction.atomic():
+                route.save()
+        except IntegrityError:
+            form.add_error("path", "This path is already assigned on this domain.")
+        else:
+            messages.success(request, f"Route /{route.path}/ now points to {route.page.name}.")
+            return redirect("domain_setup", pk=pk, domain_pk=domain.pk)
+    return render(request, "pages/domain_setup.html", {
+        "page": page,
+        "domain": domain,
+        "cname_target": settings.CUSTOM_DOMAIN_CNAME_TARGET,
+        "dns_record_name": domain.hostname,
+        "route_form": form,
+    })
+
+@owner_required
+@require_POST
+def domain_route_delete(request, pk, domain_pk, route_pk):
+    page = get_object_or_404(LandingPage, pk=pk)
+    domain = get_object_or_404(Domain, pk=domain_pk, page=page)
+    route = get_object_or_404(DomainRoute, pk=route_pk, domain=domain)
+    route.delete()
+    messages.success(request, "Published route removed.")
+    return redirect("domain_setup", pk=pk, domain_pk=domain.pk)
 
 @owner_required
 @require_POST
@@ -329,6 +368,31 @@ def public_asset(request, page_slug, path):
 def public_host_asset(request, path):
     if request.is_manager_host:
         raise Http404
+    domain = Domain.objects.filter(
+        hostname=request.site_host, status=Domain.STATUS_VERIFIED,
+    ).first()
+    if domain:
+        clean_path = path.strip("/")
+        route_path, separator, asset_path = clean_path.partition("/")
+        route = DomainRoute.objects.filter(domain=domain, path=route_path).select_related(
+            "page__published_version",
+        ).first()
+        if route:
+            if not separator:
+                if not path.endswith("/"):
+                    return redirect(f"/{route.path}/", permanent=True)
+                if not route.page.is_published:
+                    raise Http404
+                return render_public_page(request, route.page, asset_base_url=f"/{route.path}/")
+            if not route.page.is_published or not route.page.published_version or not route.page.published_version.artifact_path:
+                raise Http404
+            try:
+                target = serve_file_path(route.page.published_version, asset_path)
+            except FileNotFoundError:
+                raise Http404
+            if not target.is_file():
+                raise Http404
+            return FileResponse(target.open("rb"), content_type=mimetypes.guess_type(target.name)[0] or "application/octet-stream")
     page = _public_page_for_host(request.site_host)
     if not page or not page.published_version or not page.published_version.artifact_path:
         raise Http404

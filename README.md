@@ -75,6 +75,12 @@ Open a landing page and choose **Ads tracking** to configure that page's Meta Pi
 
 Meta and Google use browser events for page views, checkout starts and confirmed purchases. OpenAI uses browser events plus a retryable server-side `order_created` event after the Stripe webhook confirms payment. Put the OpenAI Conversions API key in `OPENAI_CONVERSIONS_API_KEY`; it is never stored in the database or exposed to the browser. OpenAI browser and server purchase events share an event ID for deduplication.
 
+## Custom domains and page routes
+
+Connect a hostname such as `x.cosmic135.com`, then add the displayed CNAME at the DNS provider with `go.cosmic135.com` as its value. Once the manager verifies the record, Caddy provisions HTTPS automatically.
+
+One verified hostname can publish multiple pages using routes. For example, assign the landing page to `/landing/` and the post-purchase page to `/thankyou/`. Requests without the final slash are redirected to the canonical trailing-slash URL so relative CSS, JavaScript, fonts, and images resolve under the correct page route. The hostname root continues to display the page that originally connected the domain.
+
 ## Cosmic Tools callback
 
 Cosmic Tools should append `journey_token` to the registration URL, retain it during submission, then POST JSON to `/integrations/form-completed/` with headers:

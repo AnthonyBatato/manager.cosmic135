@@ -10,7 +10,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from users.models import ApprovedEmail
-from .models import ActionMapping, AdTrackingSettings, Domain, LandingPage
+from .models import ActionMapping, AdTrackingSettings, Domain, DomainRoute, LandingPage
 from .services import save_archive_version, save_builder_version, save_uploaded_version, validate_archive, validate_html_upload
 from .forms import PageForm
 
@@ -173,6 +173,39 @@ class PageWorkflowTests(TestCase):
         Domain.objects.create(page=page, hostname="pending.example.com")
         response = self.client.get("/", HTTP_HOST="pending.example.com")
         self.assertEqual(response.status_code, 400)
+
+    @override_settings(DEBUG=True)
+    def test_multiple_pages_can_share_domain_with_different_paths(self):
+        root = LandingPage.objects.create(name="Home", slug="route-home", created_by=self.user)
+        landing = LandingPage.objects.create(name="Landing", slug="route-landing", created_by=self.user)
+        thankyou = LandingPage.objects.create(name="Thank You", slug="route-thankyou", created_by=self.user)
+        for page, title in [(root, "Home page"), (landing, "Landing page"), (thankyou, "Thank you page")]:
+            version = save_builder_version(page, [{"type": "hero", "title": title, "body": "Ready"}], self.user)
+            page.published_version = version
+            page.is_published = True
+            page.save(update_fields=["published_version", "is_published"])
+        domain = Domain.objects.create(page=root, hostname="x.cosmic135.com", status=Domain.STATUS_VERIFIED)
+        DomainRoute.objects.create(domain=domain, page=landing, path="landing")
+        DomainRoute.objects.create(domain=domain, page=thankyou, path="thankyou")
+
+        landing_response = self.client.get("/landing/", HTTP_HOST=domain.hostname)
+        thankyou_response = self.client.get("/thankyou/", HTTP_HOST=domain.hostname)
+        canonical_redirect = self.client.get("/landing", HTTP_HOST=domain.hostname)
+
+        self.assertContains(landing_response, "Landing page")
+        self.assertContains(thankyou_response, "Thank you page")
+        self.assertRedirects(canonical_redirect, "/landing/", status_code=301, fetch_redirect_response=False)
+
+    def test_owner_can_assign_page_to_domain_path(self):
+        root = LandingPage.objects.create(name="Home", slug="route-form-home", created_by=self.user)
+        thankyou = LandingPage.objects.create(name="Thank You", slug="route-form-thankyou", created_by=self.user)
+        domain = Domain.objects.create(page=root, hostname="routes.example.com", status=Domain.STATUS_VERIFIED)
+        response = self.client.post(reverse("domain_route_create", args=[root.pk, domain.pk]), {
+            "path": "thankyou",
+            "page": thankyou.pk,
+        })
+        self.assertRedirects(response, reverse("domain_setup", args=[root.pk, domain.pk]))
+        self.assertTrue(DomainRoute.objects.filter(domain=domain, page=thankyou, path="thankyou").exists())
 
     @override_settings(DEBUG=True)
     def test_published_page_injects_page_specific_pixels_but_preview_does_not(self):

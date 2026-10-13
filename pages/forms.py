@@ -3,7 +3,7 @@ import re
 
 from django import forms
 from django.utils.translation import gettext_lazy as _
-from .models import ActionMapping, AdTrackingSettings, Domain, LandingPage
+from .models import ActionMapping, AdTrackingSettings, Domain, DomainRoute, LandingPage
 
 class PageForm(forms.ModelForm):
     class Meta:
@@ -56,6 +56,28 @@ class DomainForm(forms.ModelForm):
         ):
             raise forms.ValidationError(_("Enter a valid domain such as promo.example.com."))
         return hostname
+
+class DomainRouteForm(forms.ModelForm):
+    RESERVED_PATHS = {
+        "admin", "accounts", "api", "book", "i18n", "p", "pages", "payments",
+        "preview-assets-public", "preview-public", "r", "static",
+    }
+
+    class Meta:
+        model = DomainRoute
+        fields = ["path", "page"]
+        labels = {"path": _("URL path"), "page": _("Landing page")}
+        help_texts = {"path": _("Use lowercase letters, numbers, and hyphens, such as thankyou.")}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["page"].queryset = LandingPage.objects.order_by("name")
+
+    def clean_path(self):
+        path = self.cleaned_data["path"].strip("/").lower()
+        if path in self.RESERVED_PATHS:
+            raise forms.ValidationError(_("This path is reserved by the application. Choose another path."))
+        return path
 
 class AdTrackingSettingsForm(forms.ModelForm):
     class Meta:

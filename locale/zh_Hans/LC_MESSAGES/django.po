@@ -234,3 +234,33 @@ msgstr "无法使用 CNAME？通过 TXT 验证所有权"
 
 msgid "Some root domains require an ALIAS/ANAME record. Point it to the same value, then add this TXT record for verification:"
 msgstr "部分根域名需要 ALIAS/ANAME 记录。请将其指向相同的值，然后添加此 TXT 记录进行验证："
+
+msgid "URL path"
+msgstr "网址路径"
+
+msgid "Landing page"
+msgstr "落地页"
+
+msgid "Use lowercase letters, numbers, and hyphens, such as thankyou."
+msgstr "请使用小写字母、数字和连字符，例如 thankyou。"
+
+msgid "This path is reserved by the application. Choose another path."
+msgstr "此路径由应用程序保留，请选择其他路径。"
+
+msgid "PUBLISHED ROUTES"
+msgstr "已发布路线"
+
+msgid "Pages on this domain"
+msgstr "此域名上的页面"
+
+msgid "Give each published landing page its own path on the same domain."
+msgstr "在同一个域名下，为每个已发布的落地页设置独立路径。"
+
+msgid "Root page"
+msgstr "根页面"
+
+msgid "Remove route"
+msgstr "移除路线"
+
+msgid "Add page route"
+msgstr "添加页面路线"

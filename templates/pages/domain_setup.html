@@ -24,5 +24,18 @@
     <details class="txt-fallback"><summary>{% trans "Cannot use a CNAME? Verify ownership with TXT" %}</summary><p class="muted">{% trans "Some root domains require an ALIAS/ANAME record. Point it to the same value, then add this TXT record for verification:" %}</p><pre><code>TXT _cosmic-verify.{{ domain.hostname }} = {{ domain.verification_token }}</code></pre></details>
   {% endif %}
 </section>
+
+<section class="panel domain-panel route-panel">
+  <p class="eyebrow">{% trans "PUBLISHED ROUTES" %}</p>
+  <h2>{% trans "Pages on this domain" %}</h2>
+  <p class="muted">{% trans "Give each published landing page its own path on the same domain." %}</p>
+  <div class="route-list">
+    <div class="route-item root-route"><span><strong>https://{{ domain.hostname }}/</strong><small>{{ domain.page.name }} · {% trans "Root page" %}</small></span><span class="status {% if domain.page.is_published %}live{% endif %}">{% if domain.page.is_published %}{% trans "Live" %}{% else %}{% trans "Draft" %}{% endif %}</span></div>
+    {% for route in domain.routes.all %}
+      <div class="route-item"><span><strong>https://{{ domain.hostname }}/{{ route.path }}/</strong><small>{{ route.page.name }}</small></span><span class="route-actions"><span class="status {% if route.page.is_published %}live{% endif %}">{% if route.page.is_published %}{% trans "Live" %}{% else %}{% trans "Draft" %}{% endif %}</span><form method="post" action="{% url 'domain_route_delete' page.pk domain.pk route.pk %}">{% csrf_token %}<button class="text-button danger" aria-label="{% trans 'Remove route' %}">×</button></form></span></div>
+    {% endfor %}
+  </div>
+  <form method="post" action="{% url 'domain_route_create' page.pk domain.pk %}" class="route-form">{% csrf_token %}{{ route_form.non_field_errors }}<label>{% trans "URL path" %}<div class="route-path-input"><span>https://{{ domain.hostname }}/</span>{{ route_form.path }}<span>/</span></div>{{ route_form.path.errors }}<small>{{ route_form.path.help_text }}</small></label><label>{% trans "Landing page" %}{{ route_form.page }}{{ route_form.page.errors }}</label><button class="button primary">{% trans "Add page route" %}</button></form>
+</section>
 {% endblock %}
 {% block scripts %}<script>document.querySelectorAll('[data-copy]').forEach(function(button){button.addEventListener('click',async function(){await navigator.clipboard.writeText(this.dataset.copy);this.textContent='{% trans "Copied" %}';});});</script>{% endblock %}
