@@ -37,6 +37,8 @@ class CheckoutAttempt(models.Model):
     page_version = models.ForeignKey("pages.PageVersion", null=True, blank=True, on_delete=models.SET_NULL)
     customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL)
     stripe_session_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    openai_oppref = models.CharField(max_length=2048, blank=True)
+    openai_obref = models.CharField(max_length=2048, blank=True)
     status = models.CharField(max_length=16, default=STATUS_CREATED)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -71,4 +73,24 @@ class Journey(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
     completion_source = models.CharField(max_length=40, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+class AdConversionDelivery(models.Model):
+    STATUS_QUEUED = "queued"
+    STATUS_SENT = "sent"
+    STATUS_FAILED = "failed"
+    provider = models.CharField(max_length=24, default="openai")
+    payment = models.ForeignKey(Payment, on_delete=models.CASCADE, related_name="ad_conversion_deliveries")
+    pixel_id = models.CharField(max_length=120)
+    event_id = models.CharField(max_length=120)
+    event_type = models.CharField(max_length=80)
+    payload = models.JSONField(default=dict)
+    status = models.CharField(max_length=16, default=STATUS_QUEUED)
+    attempts = models.PositiveIntegerField(default=0)
+    response_code = models.PositiveIntegerField(null=True, blank=True)
+    error = models.TextField(blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["provider", "pixel_id", "event_id"], name="unique_ad_conversion_event")]
 

@@ -8,6 +8,7 @@ A private Django application for building and publishing landing pages, acceptin
 - Section-based page builder and validated static ZIP imports with immutable versions, preview, publish and rollback.
 - Wildcard campaign hosts, verified custom domains and Caddy-managed HTTPS.
 - Stripe-hosted Checkout with signed, idempotent webhook processing.
+- Per-page Meta Pixel, Google Ads and OpenAI/ChatGPT Ads tracking with consent controls.
 - Tracked SiteGiant/external checkout redirects without falsely treating clicks as payments.
 - Opaque continuation links and Celery-powered bilingual email sequences.
 - HMAC-signed Cosmic Tools registration completion callbacks.
@@ -41,7 +42,7 @@ A private Django application for building and publishing landing pages, acceptin
 
 6. In Stripe, create a webhook to:
 
-   `https://manager.cosmic135.com/commerce/stripe/webhook/`
+   `https://manager.cosmic135.com/payments/webhook/stripe/`
 
    Subscribe to Checkout completion/expiration, asynchronous payment success/failure, charge refund and payment-intent events. Put the signing secret in `STRIPE_WEBHOOK_SECRET` and Stripe Price IDs on Offer records.
 
@@ -67,6 +68,12 @@ Add action markers to buttons or links:
 ```
 
 Use a suffix for more than one action of a type, for example `data-lpm-action="checkout:premium"`. Each detected key must be mapped before publication.
+
+## Advertising tracking
+
+Open a landing page and choose **Ads tracking** to configure that page's Meta Pixel ID, Google Ads ID and conversion label, or OpenAI/ChatGPT Ads Pixel ID. Tracking code is injected only into published pages; previews never send advertising events. When consent is required, the public page asks the visitor before loading any advertising SDK.
+
+Meta and Google use browser events for page views, checkout starts and confirmed purchases. OpenAI uses browser events plus a retryable server-side `order_created` event after the Stripe webhook confirms payment. Put the OpenAI Conversions API key in `OPENAI_CONVERSIONS_API_KEY`; it is never stored in the database or exposed to the browser. OpenAI browser and server purchase events share an event ID for deduplication.
 
 ## Cosmic Tools callback
 

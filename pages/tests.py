@@ -129,3 +129,37 @@ class PageWorkflowTests(TestCase):
         response = self.client.get(reverse("tracking_settings", args=[page.pk]))
         self.assertEqual(response.status_code, 302)
 
+    @override_settings(DEBUG=True)
+    def test_published_page_injects_page_specific_pixels_but_preview_does_not(self):
+        page = LandingPage.objects.create(name="Tracked", slug="tracked", created_by=self.user)
+        version = save_builder_version(page, [{"type": "hero", "title": "Tracked", "body": "Body", "action": "checkout"}], self.user)
+        page.published_version = version
+        page.is_published = True
+        page.save(update_fields=["published_version", "is_published"])
+        AdTrackingSettings.objects.create(
+            page=page, meta_enabled=True, meta_pixel_id="111222333",
+            google_ads_enabled=True, google_ads_id="AW-123456", google_ads_conversion_label="SaleLabel",
+            openai_enabled=True, openai_pixel_id="987654", require_consent=True,
+        )
+        public = self.client.get(reverse("local_public_page", args=[page.slug]) + "?oppref=opaque-reference")
+        self.assertContains(public, "cosmic-ads-runtime")
+        self.assertContains(public, "111222333")
+        self.assertContains(public, "AW-123456")
+        self.assertContains(public, "987654")
+        self.assertContains(public, "page_viewed")
+        self.assertContains(public, "checkout_started")
+        self.assertContains(public, "opaque-reference")
+        preview = self.client.get(reverse("page_preview", args=[page.pk]))
+        self.assertNotContains(preview, "cosmic-ads-runtime")
+
+    def test_tracking_configuration_is_script_safe(self):
+        page = LandingPage.objects.create(name="Safe", slug="safe", created_by=self.user)
+        version = save_builder_version(page, [{"type": "content", "title": "Safe", "body": "Body"}], self.user)
+        page.published_version = version
+        page.is_published = True
+        page.save(update_fields=["published_version", "is_published"])
+        AdTrackingSettings.objects.create(page=page, openai_enabled=True, openai_pixel_id="</script><script>alert(1)</script>", require_consent=False)
+        response = self.client.get(reverse("local_public_page", args=[page.slug]))
+        self.assertNotContains(response, "</script><script>alert(1)</script>")
+        self.assertContains(response, "\\u003c/script\\u003e")
+

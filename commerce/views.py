@@ -6,6 +6,7 @@ from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from pages.models import ActionMapping
+from pages.tracking import purchase_tracking_markup
 from .models import CheckoutAttempt, Journey, Offer, StripeEvent
 from .tasks import process_stripe_event
 
@@ -14,7 +15,12 @@ def checkout_start(request, action_id):
     offer = get_object_or_404(Offer, pk=action.target_id, active=True)
     if not settings.STRIPE_SECRET_KEY:
         return render(request, "commerce/integration_required.html", {"service": "Stripe", "detail": "Add STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET to enable checkout."}, status=503)
-    attempt = CheckoutAttempt.objects.create(page=action.page, page_version=action.page.published_version, action=action, offer=offer)
+    attribution_matches_page = request.session.get("openai_attribution_page_id") == action.page_id
+    attempt = CheckoutAttempt.objects.create(
+        page=action.page, page_version=action.page.published_version, action=action, offer=offer,
+        openai_oppref=request.session.get("openai_oppref", "")[:2048] if attribution_matches_page else "",
+        openai_obref=request.session.get("openai_obref", "")[:2048] if attribution_matches_page else "",
+    )
     stripe.api_key = settings.STRIPE_SECRET_KEY
     root = request.build_absolute_uri("/").rstrip("/")
     session = stripe.checkout.Session.create(
@@ -40,7 +46,11 @@ def checkout_success(request):
     session_id = request.GET.get("session_id", "")
     attempt = CheckoutAttempt.objects.filter(stripe_session_id=session_id).select_related("payment__journey").first()
     journey = getattr(getattr(attempt, "payment", None), "journey", None) if attempt else None
-    return render(request, "commerce/success.html", {"attempt": attempt, "journey": journey})
+    payment = getattr(attempt, "payment", None) if attempt else None
+    return render(request, "commerce/success.html", {
+        "attempt": attempt, "journey": journey,
+        "purchase_tracking_markup": purchase_tracking_markup(payment, request) if payment else "",
+    })
 
 def continue_journey(request, token):
     journey = get_object_or_404(Journey.objects.select_related("customer"), token=token)

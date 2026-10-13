@@ -27,6 +27,11 @@ def process_checkout_event(event_record):
     session_id = obj.get("id")
     if event_type in {"checkout.session.completed", "checkout.session.async_payment_succeeded"}:
         attempt = CheckoutAttempt.objects.select_for_update().select_related("offer").get(stripe_session_id=session_id)
+        if event_type == "checkout.session.completed" and obj.get("payment_status") not in {None, "paid", "no_payment_required"}:
+            event_record.processed_at = timezone.now()
+            event_record.error = ""
+            event_record.save(update_fields=["processed_at", "error"])
+            return None
         email = (obj.get("customer_details") or {}).get("email") or obj.get("customer_email")
         if not email:
             raise ValueError("Stripe session did not provide a customer email.")
@@ -54,6 +59,9 @@ def process_checkout_event(event_record):
         )
         if refund_seen:
             _mark_refunded(payment)
+        if payment.status == "paid":
+            from .tracking import queue_purchase_conversion
+            queue_purchase_conversion(payment)
     elif event_type == "checkout.session.expired":
         CheckoutAttempt.objects.filter(stripe_session_id=session_id).update(status=CheckoutAttempt.STATUS_EXPIRED)
         journey = None

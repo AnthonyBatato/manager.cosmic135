@@ -3,7 +3,7 @@
 {% block title %}{% trans "Ads tracking" %} · Cosmic Launch{% endblock %}
 {% block content %}
 <header class="topbar tracking-header">
-  <div><a href="{% url 'page_edit' page.pk %}" class="back">← {{ page.name }}</a><p class="eyebrow">{% trans "MEASUREMENT" %}</p><h1>{% trans "Ads tracking" %}</h1><p>{% trans "These identifiers apply only to this landing page." %} <strong>{{ page.slug }}.go.cosmic135.com</strong></p></div>
+  <div><a href="{% url 'page_edit' page.pk %}" class="back">← {{ page.name }}</a><p class="eyebrow">{% trans "MEASUREMENT" %}</p><h1>{% trans "Ads tracking" %}</h1><p>{% trans "These identifiers apply only to this landing page." %} <strong>{{ page.slug }}.go.cosmic135.com</strong><br>{% trans "Tracking runs on the published page after consent and is disabled in previews." %}</p></div>
 </header>
 
 <form method="post" class="tracking-form">
@@ -14,7 +14,7 @@
       <div class="tracking-brand meta-brand"><span>f</span><div><h2>Meta Pixel</h2><p>{% trans "Facebook and Instagram advertising" %}</p></div></div>
       <label class="switch-row">{{ form.meta_enabled }}<span>{% trans "Enable Meta Pixel" %}</span></label>
       <label>{{ form.meta_pixel_id.label }}{{ form.meta_pixel_id }}<small>{{ form.meta_pixel_id.help_text }}</small>{{ form.meta_pixel_id.errors }}</label>
-      <div class="integration-status"><span class="status {% if server_integrations.meta %}live{% endif %}">{% if server_integrations.meta %}{% trans "Server key configured" %}{% else %}{% trans "Browser tracking only" %}{% endif %}</span></div>
+      <div class="integration-status"><span class="status">{% trans "Browser pixel" %}</span></div>
     </article>
 
     <article class="panel tracking-card">

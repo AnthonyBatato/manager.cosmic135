@@ -113,6 +113,9 @@ CELERY_BEAT_SCHEDULE = {
     "reconcile-google-bookings": {
         "task": "bookings.tasks.reconcile_google_bookings", "schedule": 900.0,
     },
+    "dispatch-pending-ad-conversions": {
+        "task": "commerce.tasks.dispatch_pending_ad_conversions", "schedule": 300.0,
+    },
 }
 
 MANAGER_HOST = os.getenv("MANAGER_HOST", "manager.cosmic135.com")
@@ -121,7 +124,6 @@ PREVIEW_HOST = os.getenv("PREVIEW_HOST", "preview.go.cosmic135.com")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 OPENAI_CONVERSIONS_API_KEY = os.getenv("OPENAI_CONVERSIONS_API_KEY", "")
-META_CONVERSIONS_API_TOKEN = os.getenv("META_CONVERSIONS_API_TOKEN", "")
 FORM_CALLBACK_SECRET = os.getenv("FORM_CALLBACK_SECRET", "")
 TOKEN_ENCRYPTION_KEY = os.getenv("TOKEN_ENCRYPTION_KEY", "")
 

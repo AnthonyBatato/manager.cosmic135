@@ -15,6 +15,7 @@ from django.views.decorators.http import require_POST
 from .forms import ActionMappingForm, AdTrackingSettingsForm, BuilderForm, DomainForm, PageForm, UploadForm
 from .models import ActionClick, ActionMapping, AdTrackingSettings, Domain, LandingPage, Visit
 from .services import render_builder, save_uploaded_version, save_builder_version, serve_file_path
+from .tracking import inject_tracking
 from users.auth import owner_required
 
 def _public_page_for_host(host):
@@ -56,7 +57,6 @@ def tracking_settings(request, pk):
         return redirect("tracking_settings", pk=page.pk)
     server_integrations = {
         "openai": bool(settings.OPENAI_CONVERSIONS_API_KEY),
-        "meta": bool(settings.META_CONVERSIONS_API_TOKEN),
     }
     return render(request, "pages/tracking_settings.html", {
         "page": page, "form": form, "tracking": tracking, "server_integrations": server_integrations,
@@ -202,6 +202,8 @@ def render_public_page(request, page, preview=False, local=False, preview_token=
         href = reverse("action_redirect", kwargs={"page_slug": page.slug, "action_key": key})
         return f'data-lpm-action="{kind}:{key}" href="{href}"'
     source = re.sub(r'data-lpm-action=["\'](checkout|booking|form|external-checkout)(?::([a-z0-9-]+))?["\'](?:\s+href=["\'][^"\']*["\'])?', rewrite, source, flags=re.I)
+    if not preview:
+        source = inject_tracking(source, page, request)
     return HttpResponse(source, content_type="text/html; charset=utf-8", headers={"Content-Security-Policy": "frame-ancestors 'self' https://manager.cosmic135.com"})
 
 @login_required
@@ -322,6 +324,15 @@ def action_redirect(request, page_slug, action_key):
     page = get_object_or_404(LandingPage, slug=page_slug, is_published=True)
     action = get_object_or_404(ActionMapping, page=page, key=action_key, enabled=True)
     if not request.session.session_key: request.session.create()
+    consent_cookie = request.COOKIES.get(f"cosmic_ads_consent_{page.pk}")
+    if consent_cookie == "granted":
+        oppref = request.GET.get("oppref", "")[:2048]
+        obref = request.COOKIES.get("__obref", "")[:2048]
+        if oppref:
+            request.session["openai_oppref"] = oppref
+        if obref:
+            request.session["openai_obref"] = obref
+        request.session["openai_attribution_page_id"] = page.pk
     ActionClick.objects.create(page=page, action=action, session_key=request.session.session_key or "")
     if action.action_type == ActionMapping.ACTION_CHECKOUT:
         return redirect("checkout_start", action_id=action.pk)
