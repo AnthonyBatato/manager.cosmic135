@@ -17,6 +17,11 @@ A private Django application for building and publishing landing pages, acceptin
 
 ## First deployment
 
+For the existing Cosmic135 VPS that already runs Nginx and Certbot, follow
+[`deploy/VPS_DEPLOYMENT.md`](deploy/VPS_DEPLOYMENT.md). It uses
+`docker-compose.server.yml`, joins the shared `inside-network`, and disables the
+bundled Caddy service so ports 80/443 remain owned by the central Nginx.
+
 1. Copy `.env.example` to `.env`. Set `DEBUG=0`, generate unique secrets and use a strong PostgreSQL password.
 2. Generate the Fernet key used for Google refresh-token encryption:
 

@@ -1,0 +1,24 @@
+# Production override for the existing Cosmic135 VPS.
+# The central Nginx container owns ports 80/443 and reaches manager135 through
+# the shared inside-network. Caddy stays available for standalone deployments,
+# but is disabled unless its profile is explicitly selected.
+services:
+  web:
+    container_name: manager135
+    networks:
+      - default
+      - inside-network
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/accounts/login/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  caddy:
+    profiles: ["standalone-caddy"]
+
+networks:
+  inside-network:
+    external: true
+    name: inside-network
