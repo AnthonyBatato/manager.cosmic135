@@ -1,0 +1,380 @@
+COSMIC135 VPS - NEW PROJECT DEPLOYMENT GUIDE
+=============================================
+
+EXISTING SERVER ARCHITECTURE
+----------------------------
+
+The VPS uses:
+
+- Central Nginx container for ports 80 and 443
+- Central Certbot container for HTTPS certificates
+- Shared Docker network: inside-network
+- Separate Docker Compose deployment for each project
+- Application containers available to Nginx through Docker networking
+
+A new project must not bind ports 80 or 443 and should normally not expose its
+application port publicly.
+
+
+1. CHOOSE UNIQUE PROJECT VALUES
+-------------------------------
+
+Example:
+
+Project name: new-project
+Domain: app.cosmic135.com
+Repository: https://github.com/USERNAME/REPOSITORY.git
+Branch: main
+Container name: new_project_web
+Internal port: 8000
+Server directory: /root/new-project
+
+Every project needs a unique:
+
+- Server directory
+- Docker Compose project name
+- Container name
+- Database volume
+- Redis volume
+- Domain
+- Nginx configuration filename
+
+
+2. CONFIGURE DNS
+----------------
+
+At the DNS provider, create:
+
+Type: A
+Host: app
+Value: VPS_PUBLIC_IP
+
+Wait for the DNS record to resolve before requesting HTTPS.
+
+Check it with:
+
+getent hosts app.cosmic135.com
+
+
+3. CLONE THE PROJECT
+--------------------
+
+mkdir -p /root/new-project
+cd /root/new-project
+
+git clone REPOSITORY_URL
+cd REPOSITORY_FOLDER
+
+git branch --show-current
+
+Use the actual branch returned by Git, usually main or master.
+
+
+4. PREPARE THE ENVIRONMENT FILE
+-------------------------------
+
+cp .env.production.example .env
+nano .env
+
+Generate secrets:
+
+python3 -c 'import secrets; print(secrets.token_urlsafe(64))'
+python3 -c 'import secrets; print(secrets.token_urlsafe(48))'
+python3 -c 'import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())'
+
+Important:
+
+- Never commit .env.
+- Never paste .env into chat.
+- Avoid $ in passwords because Docker Compose may interpret it as a variable.
+- If the database password appears in DATABASE_URL, both values must match.
+- Use DEBUG=0 in production.
+
+Check for accidentally interpolated variables without exposing their values:
+
+grep -nE '\$[A-Za-z_][A-Za-z0-9_]*' .env | sed 's/=.*$/=<redacted>/'
+
+
+5. CONNECT THE APPLICATION TO THE SHARED NETWORK
+------------------------------------------------
+
+The production Compose override should resemble:
+
+services:
+  web:
+    container_name: new_project_web
+    networks:
+      - default
+      - inside-network
+
+networks:
+  inside-network:
+    external: true
+    name: inside-network
+
+Do not publish application ports unless there is a specific reason.
+
+Avoid:
+
+ports:
+  - "8000:8000"
+
+Nginx can reach new_project_web:8000 through inside-network.
+
+If the repository contains Caddy, Nginx, or Traefik, disable that service on
+this VPS because central Nginx already owns ports 80 and 443.
+
+
+6. VALIDATE COMPOSE BEFORE STARTING
+-----------------------------------
+
+docker compose -p new-project \
+  -f docker-compose.yml \
+  -f docker-compose.server.yml \
+  config --services
+
+docker compose -p new-project \
+  -f docker-compose.yml \
+  -f docker-compose.server.yml \
+  config --profiles
+
+Resolve all warnings before continuing.
+
+
+7. START THE PROJECT
+--------------------
+
+docker compose -p new-project \
+  -f docker-compose.yml \
+  -f docker-compose.server.yml \
+  up -d --build
+
+Check status and logs:
+
+docker compose -p new-project \
+  -f docker-compose.yml \
+  -f docker-compose.server.yml \
+  ps
+
+docker compose -p new-project \
+  -f docker-compose.yml \
+  -f docker-compose.server.yml \
+  logs --tail=100
+
+Do not continue to Nginx until the web container is healthy.
+
+
+8. ADD THE TEMPORARY NGINX CONFIGURATION
+----------------------------------------
+
+Create:
+
+/root/cosmic135/cosmic135/nginx/app.cosmic135.com.conf
+
+Temporary HTTP configuration:
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name app.cosmic135.com;
+
+    client_max_body_size 30m;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        proxy_pass http://new_project_web:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 90s;
+    }
+}
+
+Test and reload:
+
+docker exec nginx nginx -t
+docker exec nginx nginx -s reload
+
+Never reload Nginx if nginx -t reports an error.
+
+
+9. REQUEST THE HTTPS CERTIFICATE
+--------------------------------
+
+cd /root/cosmic135
+
+docker compose run --rm certbot certonly \
+  --webroot \
+  -w /var/www/certbot \
+  --email support@cosmic135.com \
+  --agree-tos \
+  --no-eff-email \
+  -d app.cosmic135.com
+
+Confirm the certificate exists:
+
+docker exec nginx ls -la /etc/letsencrypt/live/app.cosmic135.com
+
+
+10. ENABLE HTTPS
+----------------
+
+Replace the Nginx configuration with:
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name app.cosmic135.com;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name app.cosmic135.com;
+
+    ssl_certificate /etc/letsencrypt/live/app.cosmic135.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/app.cosmic135.com/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+
+    client_max_body_size 30m;
+
+    location / {
+        proxy_pass http://new_project_web:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 90s;
+    }
+}
+
+Validate and reload:
+
+docker exec nginx nginx -t
+docker exec nginx nginx -s reload
+
+Then open:
+
+https://app.cosmic135.com
+
+
+11. INITIAL APPLICATION SETUP
+-----------------------------
+
+For Django applications:
+
+docker compose -p new-project \
+  -f docker-compose.yml \
+  -f docker-compose.server.yml \
+  exec web python manage.py migrate
+
+docker compose -p new-project \
+  -f docker-compose.yml \
+  -f docker-compose.server.yml \
+  exec web python manage.py collectstatic --noinput
+
+Use the project's own bootstrap or superuser command where applicable.
+
+Avoid placing passwords directly in shell commands. Prefer an interactive
+password prompt.
+
+
+12. ROUTINE UPDATES
+-------------------
+
+cd /root/new-project/REPOSITORY_FOLDER
+
+git status
+git pull --ff-only origin main
+
+docker compose -p new-project \
+  -f docker-compose.yml \
+  -f docker-compose.server.yml \
+  up -d --build
+
+docker compose -p new-project \
+  -f docker-compose.yml \
+  -f docker-compose.server.yml \
+  ps
+
+If the repository uses master, replace main with master.
+
+Review logs after every update:
+
+docker compose -p new-project \
+  -f docker-compose.yml \
+  -f docker-compose.server.yml \
+  logs --tail=100 web
+
+
+13. TROUBLESHOOTING
+-------------------
+
+Check all projects:
+
+docker compose ls
+docker ps
+
+Check Nginx:
+
+docker exec nginx nginx -t
+docker logs --tail=100 nginx
+
+Check project logs:
+
+docker compose -p new-project \
+  -f docker-compose.yml \
+  -f docker-compose.server.yml \
+  logs --tail=200
+
+Check shared-network membership:
+
+docker inspect new_project_web \
+  --format '{{range $name, $config := .NetworkSettings.Networks}}{{$name}} {{end}}'
+
+It should include inside-network.
+
+Check disk and memory:
+
+df -h /
+free -h
+
+
+14. SAFETY CHECKLIST
+--------------------
+
+Before deployment, confirm:
+
+- DNS points to the correct VPS.
+- .env is excluded from Git.
+- DEBUG=0.
+- Secrets are unique.
+- Database volumes are persistent.
+- The new project does not bind ports 80 or 443.
+- Container names do not conflict.
+- The web container joins inside-network.
+- Nginx passes Host and X-Forwarded-Proto.
+- nginx -t succeeds before every reload.
+- HTTPS works before advertising or customer traffic is sent.
+- Database and uploaded-file backups are configured.
+
+
+LANDING PAGE MANAGER SPECIFIC GUIDE
+-----------------------------------
+
+For the Cosmic135 Landing Page Manager, also refer to:
+
+deploy/VPS_DEPLOYMENT.md
+
