@@ -12,6 +12,7 @@ from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.core import signing
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 from .forms import ActionMappingForm, AdTrackingSettingsForm, BuilderForm, DomainForm, DomainRouteForm, PageForm, UploadForm
 from .models import ActionClick, ActionMapping, AdTrackingSettings, Domain, DomainRoute, LandingPage, Visit
@@ -350,9 +351,16 @@ def domain_verify(request, pk, domain_pk):
     cname_verified = settings.CUSTOM_DOMAIN_CNAME_TARGET in cname_targets
     txt_verified = domain.verification_token in txt_values
     if cname_verified or txt_verified:
-        domain.status = Domain.STATUS_VERIFIED
-        domain.save(update_fields=["status"])
-        messages.success(request, "Domain verified and ready for HTTPS.")
+        domain.status = Domain.STATUS_PROVISIONING
+        domain.provisioning_attempts = 0
+        domain.provisioning_error = ""
+        domain.next_provision_at = timezone.now()
+        domain.provisioned_at = None
+        domain.save(update_fields=[
+            "status", "provisioning_attempts", "provisioning_error",
+            "next_provision_at", "provisioned_at",
+        ])
+        messages.success(request, "DNS verified. Automatic HTTPS provisioning has been queued.")
     else:
         messages.error(request, f"CNAME was not found yet. It must point to {settings.CUSTOM_DOMAIN_CNAME_TARGET}.")
     return redirect("domain_setup", pk=pk, domain_pk=domain.pk)
@@ -430,6 +438,7 @@ def action_redirect(request, page_slug, action_key):
 
 def allow_certificate(request):
     domain = request.GET.get("domain", "").lower().rstrip(".")
-    allowed = domain in {settings.MANAGER_HOST, settings.PUBLIC_ROOT_HOST, settings.PREVIEW_HOST} or domain.endswith("." + settings.PUBLIC_ROOT_HOST) or Domain.objects.filter(hostname=domain, status=Domain.STATUS_VERIFIED).exists()
+    allowed_statuses = [Domain.STATUS_PROVISIONING, Domain.STATUS_FAILED, Domain.STATUS_VERIFIED]
+    allowed = domain in {settings.MANAGER_HOST, settings.PUBLIC_ROOT_HOST, settings.PREVIEW_HOST} or domain.endswith("." + settings.PUBLIC_ROOT_HOST) or Domain.objects.filter(hostname=domain, status__in=allowed_statuses).exists()
     return HttpResponse("allowed" if allowed else "denied", status=200 if allowed else 403)
 

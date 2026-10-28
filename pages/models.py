@@ -41,11 +41,17 @@ class PageVersion(models.Model):
 
 class Domain(models.Model):
     STATUS_PENDING = "pending"
+    STATUS_PROVISIONING = "provisioning"
     STATUS_VERIFIED = "verified"
+    STATUS_FAILED = "failed"
     hostname = models.CharField(max_length=253, unique=True)
     page = models.ForeignKey(LandingPage, on_delete=models.CASCADE, related_name="domains")
     status = models.CharField(max_length=16, default=STATUS_PENDING)
     verification_token = models.CharField(max_length=64, default=domain_token)
+    provisioning_attempts = models.PositiveIntegerField(default=0)
+    provisioning_error = models.TextField(blank=True)
+    next_provision_at = models.DateTimeField(null=True, blank=True)
+    provisioned_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

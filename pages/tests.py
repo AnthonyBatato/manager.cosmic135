@@ -7,8 +7,10 @@ from pathlib import Path
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from users.models import ApprovedEmail
 from .models import ActionMapping, AdTrackingSettings, Domain, DomainRoute, LandingPage
 from .services import save_archive_version, save_builder_version, save_uploaded_version, validate_archive, validate_html_upload
@@ -152,8 +154,42 @@ class PageWorkflowTests(TestCase):
         resolve.side_effect = [[cname_answer], Exception("no txt")]
         response = self.client.post(reverse("domain_verify", args=[page.pk, domain.pk]))
         domain.refresh_from_db()
-        self.assertEqual(domain.status, Domain.STATUS_VERIFIED)
+        self.assertEqual(domain.status, Domain.STATUS_PROVISIONING)
+        self.assertIsNotNone(domain.next_provision_at)
         self.assertRedirects(response, reverse("domain_setup", args=[page.pk, domain.pk]))
+
+    def test_domain_provisioning_command_lifecycle(self):
+        page = LandingPage.objects.create(name="Offer", slug="provision-offer", created_by=self.user)
+        domain = Domain.objects.create(
+            page=page,
+            hostname="promo.example.com",
+            status=Domain.STATUS_PROVISIONING,
+            next_provision_at=timezone.now(),
+        )
+
+        output = io.StringIO()
+        call_command("domain_provisioning", "list", stdout=output)
+        self.assertEqual(output.getvalue().strip(), domain.hostname)
+
+        call_command("domain_provisioning", "start", domain.hostname, stdout=io.StringIO())
+        domain.refresh_from_db()
+        self.assertEqual(domain.provisioning_attempts, 1)
+        self.assertIsNone(domain.next_provision_at)
+
+        call_command(
+            "domain_provisioning", "fail", domain.hostname,
+            error="certificate request failed", stdout=io.StringIO(),
+        )
+        domain.refresh_from_db()
+        self.assertEqual(domain.status, Domain.STATUS_FAILED)
+        self.assertEqual(domain.provisioning_error, "certificate request failed")
+        self.assertIsNotNone(domain.next_provision_at)
+
+        call_command("domain_provisioning", "success", domain.hostname, stdout=io.StringIO())
+        domain.refresh_from_db()
+        self.assertEqual(domain.status, Domain.STATUS_VERIFIED)
+        self.assertIsNotNone(domain.provisioned_at)
+        self.assertIsNone(domain.next_provision_at)
 
     @override_settings(DEBUG=True)
     def test_verified_custom_domain_serves_published_page(self):

@@ -4,12 +4,14 @@
 {% block content %}
 <header class="compact-header domain-header">
   <a href="{% url 'page_edit' page.pk %}" class="back">← {{ page.name }}</a>
-  <div class="title-row"><h1>{% trans "Connect your domain" %}</h1><span class="status {% if domain.status == 'verified' %}live{% endif %}">{% if domain.status == 'verified' %}{% trans "Connected" %}{% else %}{% trans "Pending DNS" %}{% endif %}</span></div>
+  <div class="title-row"><h1>{% trans "Connect your domain" %}</h1><span class="status {% if domain.status == 'verified' %}live{% endif %}">{% if domain.status == 'verified' %}{% trans "Connected" %}{% elif domain.status == 'provisioning' %}{% trans "Preparing HTTPS" %}{% elif domain.status == 'failed' %}{% trans "Retry scheduled" %}{% else %}{% trans "Pending DNS" %}{% endif %}</span></div>
   <p>{{ domain.hostname }}</p>
 </header>
 <section class="panel domain-panel">
   {% if domain.status == 'verified' %}
     <div class="domain-success"><span>✓</span><div><h2>{% trans "Your domain is connected" %}</h2><p>{% trans "HTTPS is issued automatically. Your published landing page is available at:" %}</p><a href="https://{{ domain.hostname }}" target="_blank" rel="noopener">https://{{ domain.hostname }}</a></div></div>
+  {% elif domain.status == 'provisioning' or domain.status == 'failed' %}
+    <div class="domain-success"><span>↻</span><div><h2>{% trans "Automatic HTTPS setup is running" %}</h2><p>{% trans "The server will issue the certificate and activate this domain automatically. You may leave this page and return in a few minutes." %}</p>{% if domain.status == 'failed' %}<p><strong>{% trans "The last attempt failed and will retry automatically." %}</strong></p>{% if domain.provisioning_error %}<details><summary>{% trans "Technical details" %}</summary><pre><code>{{ domain.provisioning_error }}</code></pre></details>{% endif %}{% endif %}</div></div>
   {% else %}
     <p class="eyebrow">{% trans "EXABYTES DNS SETUP" %}</p><h2>{% trans "Add this CNAME record" %}</h2>
     <p class="muted">{% trans "Open your domain's DNS management page at Exabytes, add the record below, and save it." %}</p>

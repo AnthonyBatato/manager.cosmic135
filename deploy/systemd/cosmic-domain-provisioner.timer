@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for Cosmic Launch domains awaiting HTTPS
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+Persistent=true
+Unit=cosmic-domain-provisioner.service
+
+[Install]
+WantedBy=timers.target

@@ -109,3 +109,40 @@ deployment with:
 docker compose -p cosmic-manager -f docker-compose.yml -f docker-compose.server.yml ps
 docker compose -p cosmic-manager -f docker-compose.yml -f docker-compose.server.yml logs --tail=100 web worker beat
 ```
+
+## One-time automatic custom-domain provisioning
+
+Install the host provisioner once after the manager containers and central
+Nginx/Certbot services are working:
+
+```bash
+cd /root/cosmic135-manager/manager.cosmic135
+bash deploy/install-domain-provisioner.sh
+```
+
+The installer creates a systemd timer that checks every two minutes. For every
+domain whose CNAME has been verified in the manager, it atomically installs an
+HTTP challenge configuration, requests a Let's Encrypt certificate, installs
+the HTTPS configuration, reloads Nginx, and marks the domain connected. Failed
+attempts use exponential backoff and are retried automatically.
+
+If this VPS uses different paths or container names, edit the root-only file
+`/etc/cosmic-domain-provisioner.env`, then restart the timer:
+
+```bash
+systemctl restart cosmic-domain-provisioner.timer
+systemctl start cosmic-domain-provisioner.service
+```
+
+Inspect provisioning without exposing application secrets:
+
+```bash
+systemctl status cosmic-domain-provisioner.timer
+journalctl -u cosmic-domain-provisioner.service -n 100 --no-pager
+```
+
+After this one-time installation, each new domain only requires:
+
+1. Add the CNAME shown by the manager.
+2. Click **Verify connection**.
+3. Wait up to a few minutes for the status to change to **Connected**.
