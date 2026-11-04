@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% load i18n %}
+{% block title %}{% if offer %}{{ offer.name }}{% else %}{% trans "New offer" %}{% endif %} · Cosmic Launch{% endblock %}
+{% block content %}
+<header class="compact-header"><a class="back" href="{% url 'payment_settings' %}">← {% trans "Payments" %}</a><p class="eyebrow">STRIPE OFFER</p><h1>{% if offer %}{{ offer.name }}{% else %}{% trans "New offer" %}{% endif %}</h1><p>{% trans "Use Stripe Price IDs, not Payment Link URLs. The manager creates Checkout Sessions and confirms payment from webhooks." %}</p></header>
+<form method="post" class="panel form-panel offer-form">{% csrf_token %}
+  {{ form.non_field_errors }}
+  {% for field in form %}<label>{{ field.label }}{{ field }}{% if field.help_text %}<small class="muted">{{ field.help_text }}</small>{% endif %}{{ field.errors }}</label>{% endfor %}
+  <button class="button primary" type="submit">{% trans "Save offer" %}</button>
+</form>
+{% endblock %}

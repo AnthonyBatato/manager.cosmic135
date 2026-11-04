@@ -6,14 +6,29 @@ def journey_token():
     return secrets.token_urlsafe(40)
 
 class Offer(models.Model):
+    EMAIL_CONFIRMATION = "confirmation"
+    EMAIL_REGISTRATION = "registration"
+    EMAIL_BOTH = "both"
+    EMAIL_CHOICES = [
+        (EMAIL_CONFIRMATION, "Confirmation email"),
+        (EMAIL_REGISTRATION, "Registration / next-step email"),
+        (EMAIL_BOTH, "Both emails"),
+    ]
     name = models.CharField(max_length=160)
     stripe_price_id = models.CharField(max_length=120, blank=True)
+    stripe_test_price_id = models.CharField(max_length=120, blank=True)
+    stripe_live_price_id = models.CharField(max_length=120, blank=True)
     external_checkout_url = models.URLField(blank=True)
     currency = models.CharField(max_length=3, default="MYR")
     destination_type = models.CharField(max_length=16, choices=[("form", "Form"), ("booking", "Booking")], default="form")
     destination_id = models.PositiveBigIntegerField(null=True, blank=True)
     destination_url = models.URLField(blank=True)
+    post_payment_email = models.CharField(max_length=20, choices=EMAIL_CHOICES, default=EMAIL_REGISTRATION)
     active = models.BooleanField(default=True)
+    def stripe_price_for_mode(self, mode):
+        if mode == "live":
+            return self.stripe_live_price_id or self.stripe_price_id
+        return self.stripe_test_price_id or self.stripe_price_id
     def __str__(self): return self.name
 
 class Customer(models.Model):
@@ -37,6 +52,7 @@ class CheckoutAttempt(models.Model):
     page_version = models.ForeignKey("pages.PageVersion", null=True, blank=True, on_delete=models.SET_NULL)
     customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL)
     stripe_session_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    stripe_mode = models.CharField(max_length=8, default="test")
     openai_oppref = models.CharField(max_length=2048, blank=True)
     openai_obref = models.CharField(max_length=2048, blank=True)
     status = models.CharField(max_length=16, default=STATUS_CREATED)
@@ -54,6 +70,7 @@ class Payment(models.Model):
 class StripeEvent(models.Model):
     event_id = models.CharField(max_length=255, unique=True)
     event_type = models.CharField(max_length=120)
+    livemode = models.BooleanField(default=False)
     payload = models.JSONField(default=dict)
     processed_at = models.DateTimeField(null=True, blank=True)
     error = models.TextField(blank=True)

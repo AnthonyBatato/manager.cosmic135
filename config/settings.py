@@ -125,8 +125,26 @@ MANAGER_HOST = os.getenv("MANAGER_HOST", "manager.cosmic135.com")
 PUBLIC_ROOT_HOST = os.getenv("PUBLIC_ROOT_HOST", "go.cosmic135.com")
 PREVIEW_HOST = os.getenv("PREVIEW_HOST", "preview.go.cosmic135.com")
 CUSTOM_DOMAIN_CNAME_TARGET = os.getenv("CUSTOM_DOMAIN_CNAME_TARGET", PUBLIC_ROOT_HOST).lower().rstrip(".")
-STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+STRIPE_MODE = os.getenv("STRIPE_MODE", "test").strip().lower()
+if STRIPE_MODE not in {"test", "live"}:
+    raise ValueError("STRIPE_MODE must be either 'test' or 'live'.")
+STRIPE_TEST_SECRET_KEY = os.getenv("STRIPE_TEST_SECRET_KEY", "")
+STRIPE_LIVE_SECRET_KEY = os.getenv("STRIPE_LIVE_SECRET_KEY", "")
+STRIPE_TEST_WEBHOOK_SECRET = os.getenv("STRIPE_TEST_WEBHOOK_SECRET", "")
+STRIPE_LIVE_WEBHOOK_SECRET = os.getenv("STRIPE_LIVE_WEBHOOK_SECRET", "")
+# Legacy names remain supported so existing deployments do not break.
+STRIPE_SECRET_KEY = (
+    STRIPE_TEST_SECRET_KEY if STRIPE_MODE == "test" else STRIPE_LIVE_SECRET_KEY
+) or os.getenv("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = (
+    STRIPE_TEST_WEBHOOK_SECRET if STRIPE_MODE == "test" else STRIPE_LIVE_WEBHOOK_SECRET
+) or os.getenv("STRIPE_WEBHOOK_SECRET", "")
+STRIPE_WEBHOOK_SECRETS = list(dict.fromkeys(filter(None, [
+    STRIPE_TEST_WEBHOOK_SECRET,
+    STRIPE_LIVE_WEBHOOK_SECRET,
+    os.getenv("STRIPE_WEBHOOK_SECRET", ""),
+])))
+STRIPE_PUBLIC_BASE_URL = os.getenv("STRIPE_PUBLIC_BASE_URL", f"https://{PUBLIC_ROOT_HOST}").rstrip("/")
 OPENAI_CONVERSIONS_API_KEY = os.getenv("OPENAI_CONVERSIONS_API_KEY", "")
 FORM_CALLBACK_SECRET = os.getenv("FORM_CALLBACK_SECRET", "")
 TOKEN_ENCRYPTION_KEY = os.getenv("TOKEN_ENCRYPTION_KEY", "")

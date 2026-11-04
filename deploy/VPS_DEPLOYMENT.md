@@ -110,6 +110,47 @@ docker compose -p cosmic-manager -f docker-compose.yml -f docker-compose.server.
 docker compose -p cosmic-manager -f docker-compose.yml -f docker-compose.server.yml logs --tail=100 web worker beat
 ```
 
+## Stripe sandbox setup
+
+Open `.env` on the VPS and add the sandbox credentials directly. Do not paste
+secret keys or webhook signing secrets into chat, Git, or shell command history:
+
+```bash
+cd /root/cosmic135-manager/manager.cosmic135
+nano .env
+```
+
+Set these values:
+
+```dotenv
+STRIPE_MODE=test
+STRIPE_TEST_SECRET_KEY=sk_test_REPLACE_IN_NANO
+STRIPE_TEST_WEBHOOK_SECRET=whsec_REPLACE_IN_NANO
+STRIPE_PUBLIC_BASE_URL=https://go.cosmic135.com
+```
+
+The Stripe webhook destination is:
+
+```text
+https://manager.cosmic135.com/payments/webhook/stripe/
+```
+
+Restart the app after editing `.env`:
+
+```bash
+docker compose -p cosmic-manager -f docker-compose.yml -f docker-compose.server.yml up -d --build
+docker compose -p cosmic-manager -f docker-compose.yml -f docker-compose.server.yml logs --tail=100 web worker
+```
+
+In the manager, open **Payments**, create an offer, and enter its sandbox
+`price_...` ID. Choose whether a confirmed payment sends a confirmation email,
+a registration email with reminders, or both. On the landing page, map a
+`data-lpm-action="checkout"` action to that offer.
+
+For production later, add `STRIPE_LIVE_SECRET_KEY`,
+`STRIPE_LIVE_WEBHOOK_SECRET`, and the offer's live Price ID, then change only
+`STRIPE_MODE=live`. Keep the test and live values in place for safe switching.
+
 ## One-time automatic custom-domain provisioning
 
 Install the host provisioner once after the manager containers and central

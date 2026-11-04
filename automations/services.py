@@ -5,10 +5,18 @@ from .models import EmailDelivery, EmailTemplate, ReminderStep
 
 def schedule_journey_emails(journey):
     now = timezone.now()
-    for immediate in EmailTemplate.objects.filter(kind__in=["payment_confirmation", "action_request"], active=True):
+    email_mode = journey.payment.attempt.offer.post_payment_email
+    immediate_kinds = {
+        "confirmation": ["payment_confirmation"],
+        "registration": ["action_request"],
+        "both": ["payment_confirmation", "action_request"],
+    }.get(email_mode, ["action_request"])
+    for immediate in EmailTemplate.objects.filter(kind__in=immediate_kinds, active=True):
         delivery, created = EmailDelivery.objects.get_or_create(journey=journey, template=immediate, reminder_step=None, defaults={"scheduled_for": now})
         if created:
             transaction.on_commit(lambda pk=delivery.pk: _dispatch(pk, now))
+    if email_mode == "confirmation":
+        return
     for step in ReminderStep.objects.filter(active=True, template__active=True).select_related("template"):
         scheduled = now + timedelta(hours=step.delay_hours)
         delivery, created = EmailDelivery.objects.get_or_create(journey=journey, template=step.template, reminder_step=step, defaults={"scheduled_for": scheduled})

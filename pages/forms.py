@@ -4,6 +4,7 @@ import re
 from django import forms
 from django.utils.translation import gettext_lazy as _
 from .models import ActionMapping, AdTrackingSettings, Domain, DomainRoute, LandingPage
+from commerce.models import Offer
 
 class PageForm(forms.ModelForm):
     class Meta:
@@ -35,10 +36,48 @@ class UploadForm(forms.Form):
     )
 
 class ActionMappingForm(forms.ModelForm):
+    offer = forms.ModelChoiceField(queryset=Offer.objects.none(), required=False, help_text=_("Required for Stripe checkout actions."))
+    booking_type_id = forms.IntegerField(required=False, min_value=1, help_text=_("Required for booking actions."))
+
     class Meta:
         model = ActionMapping
-        fields = ["key", "label", "action_type", "target_id", "target_url", "enabled"]
-        help_texts = {"target_id": "Offer ID for checkout or booking type ID for booking.", "target_url": "Required for form and external checkout actions."}
+        fields = ["key", "label", "action_type", "target_url", "enabled"]
+        help_texts = {"target_url": _("Required for registration form and external checkout actions.")}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["offer"].queryset = Offer.objects.filter(active=True).order_by("name")
+        self.order_fields(["key", "label", "action_type", "offer", "booking_type_id", "target_url", "enabled"])
+        if self.instance and self.instance.pk:
+            if self.instance.action_type == ActionMapping.ACTION_CHECKOUT:
+                self.fields["offer"].initial = self.instance.target_id
+            elif self.instance.action_type == ActionMapping.ACTION_BOOKING:
+                self.fields["booking_type_id"].initial = self.instance.target_id
+
+    def clean(self):
+        cleaned = super().clean()
+        action_type = cleaned.get("action_type")
+        if action_type == ActionMapping.ACTION_CHECKOUT and not cleaned.get("offer"):
+            self.add_error("offer", _("Choose a Stripe offer."))
+        if action_type == ActionMapping.ACTION_BOOKING and not cleaned.get("booking_type_id"):
+            self.add_error("booking_type_id", _("Enter a booking type ID."))
+        if action_type in {ActionMapping.ACTION_FORM, ActionMapping.ACTION_EXTERNAL} and not cleaned.get("target_url"):
+            self.add_error("target_url", _("Enter the destination URL."))
+        return cleaned
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if instance.action_type == ActionMapping.ACTION_CHECKOUT:
+            instance.target_id = self.cleaned_data["offer"].pk
+            instance.target_url = ""
+        elif instance.action_type == ActionMapping.ACTION_BOOKING:
+            instance.target_id = self.cleaned_data["booking_type_id"]
+            instance.target_url = ""
+        else:
+            instance.target_id = None
+        if commit:
+            instance.save()
+        return instance
 
 class DomainForm(forms.ModelForm):
     class Meta:

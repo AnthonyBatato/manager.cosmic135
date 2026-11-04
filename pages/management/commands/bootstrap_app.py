@@ -38,7 +38,7 @@ class Command(BaseCommand):
         for hours in (24, 72, 168):
             ReminderStep.objects.update_or_create(name=f"Reminder after {hours} hours", defaults={"delay_hours": hours, "template": reminder, "active": True})
         defaults = [
-            ("payment_confirmation", "Payment confirmed", "Payment confirmed — Cosmic135", "付款已确认 — Cosmic135", "Thank you. Your payment has been confirmed.", "谢谢。您的付款已确认。"),
+            ("payment_confirmation", "Payment confirmed", "Payment confirmed — Cosmic135", "付款已确认 — Cosmic135", "Hello {{ customer.name|default:customer.email }},\n\nThank you. Your payment for {{ offer.name }} has been confirmed.", "您好，\n\n谢谢。您购买 {{ offer.name }} 的付款已确认。"),
             ("booking_confirmation", "Booking confirmed", "Your booking is confirmed", "您的预约已确认", "Your appointment is confirmed for {{ booking.starts_at }}. Manage it here:\n{{ action_url }}", "您的预约时间为 {{ booking.starts_at }}。管理预约：\n{{ action_url }}"),
             ("booking_cancelled", "Booking cancelled", "Your booking was cancelled", "您的预约已取消", "Your appointment has been cancelled. Reply if you need help.", "您的预约已取消。如需帮助，请回复此邮件。"),
             ("booking_rescheduled", "Booking rescheduled", "Your booking was rescheduled", "您的预约已改期", "Your new appointment time is {{ booking.starts_at }}. Manage it here:\n{{ action_url }}", "您的新预约时间为 {{ booking.starts_at }}。管理预约：\n{{ action_url }}"),

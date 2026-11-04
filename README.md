@@ -49,7 +49,7 @@ bundled Caddy service so ports 80/443 remain owned by the central Nginx.
 
    `https://manager.cosmic135.com/payments/webhook/stripe/`
 
-   Subscribe to Checkout completion/expiration, asynchronous payment success/failure, charge refund and payment-intent events. Put the signing secret in `STRIPE_WEBHOOK_SECRET` and Stripe Price IDs on Offer records.
+   Subscribe to Checkout completion/expiration, asynchronous payment success/failure, charge refund and payment-intent events. Set `STRIPE_MODE=test`, put the sandbox credentials in `STRIPE_TEST_SECRET_KEY` and `STRIPE_TEST_WEBHOOK_SECRET`, then add the sandbox Price ID on the offer in **Payments**. Live credentials and Price IDs are stored separately, so switching modes does not overwrite the test setup.
 
 7. Configure SMTP variables. Google Workspace relay is supported, but any standard SMTP provider works without code changes.
 

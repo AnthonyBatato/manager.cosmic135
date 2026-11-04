@@ -26,10 +26,12 @@ def send_delivery(self, delivery_pk):
         delivery.attempts += 1
         delivery.save(update_fields=["attempts"])
     if journey:
-        action_url = f"https://{settings.PUBLIC_ROOT_HOST}{reverse('continue_journey', kwargs={'token': journey.token})}"
+        action_url = f"{settings.STRIPE_PUBLIC_BASE_URL}{reverse('continue_journey', kwargs={'token': journey.token})}"
     else:
         action_url = f"https://{settings.PUBLIC_ROOT_HOST}{reverse('booking_confirmed', kwargs={'token': booking.cancellation_token})}"
-    context = Context({"customer": customer, "journey": journey, "booking": booking, "action_url": action_url})
+    payment = journey.payment if journey else None
+    offer = payment.attempt.offer if payment else None
+    context = Context({"customer": customer, "journey": journey, "payment": payment, "offer": offer, "booking": booking, "action_url": action_url})
     use_zh = customer.preferred_language == "zh"
     subject_source = delivery.template.subject_zh if use_zh and delivery.template.subject_zh else delivery.template.subject_en
     body_source = delivery.template.body_zh if use_zh and delivery.template.body_zh else delivery.template.body_en

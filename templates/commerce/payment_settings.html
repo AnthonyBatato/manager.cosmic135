@@ -1,0 +1,25 @@
+{% extends "base.html" %}{% load i18n %}
+{% block title %}{% trans "Payments" %} · Cosmic Launch{% endblock %}
+{% block content %}
+<header class="topbar payment-header">
+  <div><p class="eyebrow">STRIPE</p><h1>{% trans "Payments" %}</h1><p>{% trans "Connect each landing-page checkout button to a Stripe Price." %}</p></div>
+  <a class="button primary" href="{% url 'offer_create' %}">{% trans "New offer" %}</a>
+</header>
+<div class="integration-grid">
+  <section class="panel integration-card">
+    <div><span class="status {% if secret_configured %}live{% endif %}">{% if secret_configured %}{% trans "Configured" %}{% else %}{% trans "Missing" %}{% endif %}</span><h2>{% trans "Stripe API" %}</h2></div>
+    <p>{% blocktrans %}Checkout is currently using <strong>{{ stripe_mode }}</strong> mode.{% endblocktrans %}</p>
+    <small>{% trans "Secret keys are stored only in the server environment and are never shown here." %}</small>
+  </section>
+  <section class="panel integration-card">
+    <div><span class="status {% if webhook_configured %}live{% endif %}">{% if webhook_configured %}{% trans "Configured" %}{% else %}{% trans "Missing" %}{% endif %}</span><h2>{% trans "Payment webhook" %}</h2></div>
+    <p>{% trans "Stripe sends successful payment events to:" %}</p><code>{{ webhook_url }}</code>
+  </section>
+</div>
+<section class="panel offers-panel">
+  <div class="panel-heading"><div><h2>{% trans "Offers" %}</h2><p class="muted">{% trans "Offers control the price, next step, and email sent after payment." %}</p></div></div>
+  {% if offers %}<div class="page-rows">
+    {% for offer in offers %}<a class="page-row" href="{% url 'offer_edit' offer.pk %}"><span class="page-icon">$</span><span class="grow"><strong>{{ offer.name }}</strong><small>{{ offer.get_post_payment_email_display }}</small></span><span><strong>{{ offer.currency }}</strong><small>{% if offer.active %}{% trans "Active" %}{% else %}{% trans "Disabled" %}{% endif %}</small></span><span class="status {% if offer.active %}live{% endif %}">{{ stripe_mode }}</span></a>{% endfor %}
+  </div>{% else %}<div class="empty"><div class="empty-orbit">$</div><h2>{% trans "No Stripe offers yet" %}</h2><p>{% trans "Create an offer, then map a landing-page checkout action to it." %}</p></div>{% endif %}
+</section>
+{% endblock %}

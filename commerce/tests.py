@@ -1,7 +1,13 @@
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+import stripe
+from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from automations.models import EmailDelivery, EmailTemplate, ReminderStep
+from automations.services import schedule_journey_emails
 from pages.models import ActionMapping, AdTrackingSettings, LandingPage
+from users.models import ApprovedEmail
 from .models import AdConversionDelivery, CheckoutAttempt, Journey, Offer, Payment, StripeEvent
 from .services import process_checkout_event
 from .tasks import dispatch_pending_ad_conversions, send_ad_conversion
@@ -159,3 +165,111 @@ class StripeEventTests(TestCase):
         self.client.get(action_url + "?oppref=accepted-reference")
         self.assertEqual(self.client.session["openai_oppref"], "accepted-reference")
         self.assertEqual(self.client.session["openai_obref"], "browser-reference")
+
+
+class StripeCheckoutFlowTests(TestCase):
+    def setUp(self):
+        self.page = LandingPage.objects.create(name="Sales page", slug="sales-page", is_published=True)
+        self.offer = Offer.objects.create(
+            name="Course", stripe_test_price_id="price_test_course",
+            stripe_live_price_id="price_live_course", destination_url="https://tools.example/register/",
+        )
+        self.action = ActionMapping.objects.create(
+            page=self.page, key="checkout", label="Buy", action_type="checkout", target_id=self.offer.pk,
+        )
+
+    @override_settings(
+        STRIPE_MODE="test", STRIPE_SECRET_KEY="sk_test_private",
+        STRIPE_PUBLIC_BASE_URL="https://go.example.com", PUBLIC_ROOT_HOST="go.example.com",
+    )
+    @patch("commerce.views.stripe.checkout.Session.create")
+    def test_checkout_uses_sandbox_price_and_public_success_page(self, create_session):
+        create_session.return_value = SimpleNamespace(id="cs_test_created", url="https://checkout.stripe.test/session")
+        response = self.client.get(reverse("checkout_start", args=[self.action.pk]))
+        self.assertRedirects(response, "https://checkout.stripe.test/session", fetch_redirect_response=False)
+        kwargs = create_session.call_args.kwargs
+        self.assertEqual(kwargs["line_items"], [{"price": "price_test_course", "quantity": 1}])
+        self.assertEqual(kwargs["success_url"], "https://go.example.com/payments/success/?session_id={CHECKOUT_SESSION_ID}")
+        attempt = CheckoutAttempt.objects.get(stripe_session_id="cs_test_created")
+        self.assertEqual(attempt.stripe_mode, "test")
+
+    def test_status_becomes_paid_only_after_webhook_created_journey(self):
+        attempt = CheckoutAttempt.objects.create(
+            page=self.page, action=self.action, offer=self.offer, stripe_session_id="cs_status",
+        )
+        processing = self.client.get(reverse("checkout_status"), {"session_id": "cs_status"})
+        self.assertEqual(processing.json(), {"status": "created"})
+        from .models import Customer
+        customer = Customer.objects.create(email="buyer@example.com")
+        payment = Payment.objects.create(attempt=attempt, amount_total=1000, currency="myr")
+        journey = Journey.objects.create(
+            payment=payment, customer=customer, destination_type="form", destination_url="https://tools.example/register/",
+        )
+        attempt.status = CheckoutAttempt.STATUS_PAID
+        attempt.save(update_fields=["status"])
+        paid = self.client.get(reverse("checkout_status"), {"session_id": "cs_status"}).json()
+        self.assertEqual(paid["status"], "paid")
+        self.assertTrue(paid["has_next_step"])
+        self.assertEqual(paid["continue_url"], reverse("continue_journey", args=[journey.token]))
+
+    @override_settings(STRIPE_WEBHOOK_SECRETS=["whsec_test", "whsec_live"])
+    @patch("commerce.views.process_stripe_event.delay")
+    @patch("commerce.views.stripe.Webhook.construct_event")
+    def test_webhook_accepts_either_configured_secret_once(self, construct_event, delay):
+        construct_event.side_effect = [
+            stripe.SignatureVerificationError("bad signature", "sig"),
+            {"id": "evt_live", "type": "checkout.session.completed", "livemode": True, "data": {"object": {}}},
+        ]
+        response = self.client.post(
+            reverse("stripe_webhook"), data=b"{}", content_type="application/json", HTTP_STRIPE_SIGNATURE="sig",
+        )
+        self.assertEqual(response.status_code, 200)
+        event = StripeEvent.objects.get(event_id="evt_live")
+        self.assertTrue(event.livemode)
+        delay.assert_called_once_with(event.pk)
+
+
+class PostPaymentEmailTests(TestCase):
+    def make_journey(self, email_mode):
+        page = LandingPage.objects.create(name=f"Page {email_mode}", slug=f"page-{email_mode}")
+        offer = Offer.objects.create(name="Offer", post_payment_email=email_mode)
+        action = ActionMapping.objects.create(page=page, key="checkout", label="Buy", action_type="checkout", target_id=offer.pk)
+        attempt = CheckoutAttempt.objects.create(page=page, action=action, offer=offer)
+        from .models import Customer
+        customer = Customer.objects.create(email=f"{email_mode}@example.com")
+        payment = Payment.objects.create(attempt=attempt)
+        return Journey.objects.create(payment=payment, customer=customer)
+
+    @patch("automations.services._dispatch")
+    def test_confirmation_only_sends_no_registration_reminders(self, dispatch):
+        confirmation = EmailTemplate.objects.create(name="Confirmed", kind="payment_confirmation", subject_en="Paid", body_en="Thanks")
+        EmailTemplate.objects.create(name="Register", kind="action_request", subject_en="Register", body_en="Continue")
+        reminder = EmailTemplate.objects.create(name="Reminder", kind="reminder", subject_en="Reminder", body_en="Continue")
+        ReminderStep.objects.create(name="24 hours", delay_hours=24, template=reminder)
+        journey = self.make_journey(Offer.EMAIL_CONFIRMATION)
+        with self.captureOnCommitCallbacks(execute=True):
+            schedule_journey_emails(journey)
+        self.assertEqual(list(EmailDelivery.objects.values_list("template", flat=True)), [confirmation.pk])
+        self.assertEqual(dispatch.call_count, 1)
+
+    @patch("automations.services._dispatch")
+    def test_both_sends_confirmation_registration_and_reminder(self, dispatch):
+        EmailTemplate.objects.create(name="Confirmed", kind="payment_confirmation", subject_en="Paid", body_en="Thanks")
+        EmailTemplate.objects.create(name="Register", kind="action_request", subject_en="Register", body_en="Continue")
+        reminder = EmailTemplate.objects.create(name="Reminder", kind="reminder", subject_en="Reminder", body_en="Continue")
+        ReminderStep.objects.create(name="24 hours", delay_hours=24, template=reminder)
+        journey = self.make_journey(Offer.EMAIL_BOTH)
+        with self.captureOnCommitCallbacks(execute=True):
+            schedule_journey_emails(journey)
+        self.assertEqual(EmailDelivery.objects.filter(journey=journey).count(), 3)
+        self.assertEqual(dispatch.call_count, 3)
+
+
+class PaymentSettingsTests(TestCase):
+    def test_owner_can_open_payment_settings(self):
+        user = get_user_model().objects.create_user("owner@example.com", email="owner@example.com", password="pass")
+        ApprovedEmail.objects.create(email=user.email, role="owner")
+        self.client.force_login(user)
+        response = self.client.get(reverse("payment_settings"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Payments")
