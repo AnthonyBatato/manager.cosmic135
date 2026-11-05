@@ -48,11 +48,17 @@ def process_checkout_event(event_record):
             "customer": customer,
             "destination_type": attempt.offer.destination_type,
             "destination_id": attempt.offer.destination_id,
-            "destination_url": attempt.offer.destination_url,
+            "destination_url": "" if attempt.offer.cosmic_tools_course_id else attempt.offer.destination_url,
+            "cosmic_tools_course_id": attempt.offer.cosmic_tools_course_id,
+            "registration_link_status": "pending" if attempt.offer.cosmic_tools_course_id else "not_required",
         })
         if created:
-            from automations.services import schedule_journey_emails
-            schedule_journey_emails(journey)
+            if journey.cosmic_tools_course_id:
+                from integrations.tasks import provision_cosmic_tools_registration
+                transaction.on_commit(lambda pk=journey.pk: provision_cosmic_tools_registration.delay(pk))
+            else:
+                from automations.services import schedule_journey_emails
+                schedule_journey_emails(journey)
         refund_seen = any(
             _event_payment_intent(previous) == payment.stripe_payment_intent_id
             for previous in StripeEvent.objects.filter(event_type__in=["charge.refunded", "payment_intent.canceled"])

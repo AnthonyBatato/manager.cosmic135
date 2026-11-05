@@ -108,7 +108,9 @@ def checkout_status(request):
     result = {"status": attempt.status}
     if journey:
         result["continue_url"] = reverse("continue_journey", kwargs={"token": journey.token})
-        result["has_next_step"] = bool(journey.destination_id or journey.destination_url)
+        result["has_next_step"] = bool(
+            journey.destination_id or journey.destination_url or journey.cosmic_tools_course_id
+        )
     return JsonResponse(result)
 
 def continue_journey(request, token):
@@ -120,6 +122,11 @@ def continue_journey(request, token):
     if journey.destination_url:
         joiner = "&" if "?" in journey.destination_url else "?"
         return redirect(f"{journey.destination_url}{joiner}journey_token={journey.token}")
+    if journey.cosmic_tools_course_id and journey.registration_link_status == "pending":
+        return render(request, "commerce/integration_required.html", {
+            "service": "Registration link",
+            "detail": "Your payment is confirmed. We are preparing your personal registration link and will email it shortly.",
+        }, status=202)
     return render(request, "commerce/integration_required.html", {"service": "Next step", "detail": "This offer does not yet have a registration form or booking type assigned."}, status=503)
 
 @csrf_exempt

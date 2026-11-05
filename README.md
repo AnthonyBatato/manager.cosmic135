@@ -88,7 +88,16 @@ One verified hostname can publish multiple pages using routes. For example, assi
 
 ## Cosmic Tools callback
 
-Cosmic Tools should append `journey_token` to the registration URL, retain it during submission, then POST JSON to `/integrations/form-completed/` with headers:
+For automatic course/event registration, configure the same random secret in both deployments:
+
+```env
+COSMIC_TOOLS_INTEGRATION_SECRET=replace-with-one-long-random-secret
+COSMIC_TOOLS_REGISTRATION_API_URL=https://tools.cosmic135.com/integrations/registration-links/
+```
+
+In an offer, choose `Form` and enter the numeric **Cosmic Tools course / form ID**. After Stripe confirms payment, the worker asks Cosmic Tools to create one customer-specific registration link. Registration emails are queued only after that link is ready. Stripe and Celery retries are idempotent and cannot create duplicate links for the same journey.
+
+Cosmic Tools retains the `journey_token` with that link, then POSTs JSON to `/integrations/forms/completed/` after a successful form submission, with headers:
 
 - `X-Cosmic-Timestamp`: current Unix timestamp
 - `X-Cosmic-Signature`: `sha256=` followed by the hex HMAC-SHA256 of `timestamp + "." + raw_request_body`
@@ -104,7 +113,7 @@ The body is:
 }
 ```
 
-Both applications must share `FORM_CALLBACK_SECRET`. The callback rejects stale signatures and processes every event ID once. A Python signing example is in `integrations/example_cosmic_tools.py`.
+Both applications must share `COSMIC_TOOLS_INTEGRATION_SECRET`. The callback rejects stale signatures and processes every event ID once. A Python signing example is in `integrations/example_cosmic_tools.py`.
 
 ## Operations
 

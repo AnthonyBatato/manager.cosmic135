@@ -65,6 +65,34 @@ class StripeEventTests(TestCase):
         self.assertFalse(Journey.objects.exists())
         schedule.assert_not_called()
 
+    @patch("integrations.tasks.provision_cosmic_tools_registration.delay")
+    @patch("automations.services.schedule_journey_emails")
+    def test_course_payment_provisions_link_before_email(self, schedule, provision):
+        page = LandingPage.objects.create(name="Integrated", slug="integrated")
+        offer = Offer.objects.create(
+            name="Course", cosmic_tools_course_id=42,
+            destination_url="https://tools.example/register/generic-course/",
+        )
+        action = ActionMapping.objects.create(
+            page=page, key="checkout", label="Buy", action_type="checkout", target_id=offer.pk,
+        )
+        CheckoutAttempt.objects.create(page=page, action=action, offer=offer, stripe_session_id="cs_integrated")
+        event = StripeEvent.objects.create(
+            event_id="evt_integrated",
+            event_type="checkout.session.completed",
+            payload={"data": {"object": {
+                "id": "cs_integrated", "payment_intent": "pi_integrated", "amount_total": 200,
+                "currency": "myr", "customer_details": {"email": "course@example.com"},
+            }}},
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            journey = process_checkout_event(event)
+        self.assertEqual(journey.cosmic_tools_course_id, 42)
+        self.assertEqual(journey.registration_link_status, "pending")
+        self.assertEqual(journey.destination_url, "")
+        provision.assert_called_once_with(journey.pk)
+        schedule.assert_not_called()
+
     @override_settings(PUBLIC_ROOT_HOST="go.example.com")
     def test_openai_purchase_delivery_is_page_specific_and_idempotent(self):
         page = LandingPage.objects.create(name="Page", slug="tracked-page")

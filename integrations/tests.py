@@ -2,13 +2,14 @@ import hashlib
 import hmac
 import json
 import time
+from unittest.mock import patch
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from commerce.models import CheckoutAttempt, Customer, Journey, Offer, Payment
 from pages.models import ActionMapping, LandingPage
 
-@override_settings(FORM_CALLBACK_SECRET="shared-test-secret")
+@override_settings(COSMIC_TOOLS_INTEGRATION_SECRET="shared-test-secret")
 class FormCallbackTests(TestCase):
     def setUp(self):
         page = LandingPage.objects.create(name="Page", slug="page")
@@ -36,4 +37,55 @@ class FormCallbackTests(TestCase):
         payload = {"journey_token": self.journey.token, "submission_id": "sub-1", "event_id": "evt-2", "completed_at": timezone.now().isoformat()}
         self.assertEqual(self.signed_post(payload, secret="wrong").status_code, 401)
         self.assertEqual(self.signed_post(payload, timestamp=int(time.time()) - 600).status_code, 401)
+
+
+class CosmicToolsProvisioningTests(TestCase):
+    def setUp(self):
+        page = LandingPage.objects.create(name="Course page", slug="course-page")
+        offer = Offer.objects.create(name="Course", cosmic_tools_course_id=42, post_payment_email="registration")
+        action = ActionMapping.objects.create(
+            page=page, key="checkout", label="Buy", action_type="checkout", target_id=offer.pk,
+        )
+        attempt = CheckoutAttempt.objects.create(page=page, action=action, offer=offer, status="paid")
+        customer = Customer.objects.create(email="buyer@example.com", name="Buyer")
+        payment = Payment.objects.create(attempt=attempt)
+        self.journey = Journey.objects.create(
+            payment=payment,
+            customer=customer,
+            cosmic_tools_course_id=42,
+            registration_link_status="pending",
+        )
+
+    @override_settings(
+        COSMIC_TOOLS_INTEGRATION_SECRET="integration-secret",
+        COSMIC_TOOLS_REGISTRATION_API_URL="https://tools.example/integrations/registration-links/",
+    )
+    @patch("integrations.tasks.schedule_journey_emails")
+    @patch("integrations.tasks.request.urlopen")
+    def test_provisions_unique_link_then_schedules_email(self, urlopen, schedule):
+        from integrations.tasks import provision_cosmic_tools_registration
+
+        response = urlopen.return_value.__enter__.return_value
+        response.read.return_value = json.dumps({
+            "registration_url": "https://tools.example/register/link/customer-token/",
+        }).encode()
+
+        result = provision_cosmic_tools_registration.run(self.journey.pk)
+
+        self.assertEqual(result, "https://tools.example/register/link/customer-token/")
+        self.journey.refresh_from_db()
+        self.assertEqual(self.journey.registration_link_status, "ready")
+        self.assertEqual(self.journey.destination_url, result)
+        schedule.assert_called_once()
+        outgoing = urlopen.call_args.args[0]
+        self.assertEqual(outgoing.full_url, "https://tools.example/integrations/registration-links/")
+        sent = json.loads(outgoing.data)
+        self.assertEqual(sent["course_id"], 42)
+        self.assertEqual(sent["customer_email"], "buyer@example.com")
+        self.assertEqual(sent["journey_token"], self.journey.token)
+        self.assertTrue(outgoing.headers["X-cosmic-signature"].startswith("sha256="))
+
+        self.assertEqual(provision_cosmic_tools_registration.run(self.journey.pk), result)
+        self.assertEqual(urlopen.call_count, 1)
+        schedule.assert_called_once()
 

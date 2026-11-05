@@ -23,6 +23,11 @@ class Offer(models.Model):
     destination_type = models.CharField(max_length=16, choices=[("form", "Form"), ("booking", "Booking")], default="form")
     destination_id = models.PositiveBigIntegerField(null=True, blank=True)
     destination_url = models.URLField(blank=True)
+    cosmic_tools_course_id = models.PositiveBigIntegerField(
+        null=True,
+        blank=True,
+        help_text="Course / form ID in Cosmic Tools. A customer-specific registration link is created after payment.",
+    )
     post_payment_email = models.CharField(max_length=20, choices=EMAIL_CHOICES, default=EMAIL_REGISTRATION)
     active = models.BooleanField(default=True)
     def stripe_price_for_mode(self, mode):
@@ -86,6 +91,13 @@ class Journey(models.Model):
     destination_type = models.CharField(max_length=16, choices=[("booking", "Booking"), ("form", "Form")], default="form")
     destination_id = models.PositiveBigIntegerField(null=True, blank=True)
     destination_url = models.URLField(blank=True)
+    cosmic_tools_course_id = models.PositiveBigIntegerField(null=True, blank=True)
+    registration_link_status = models.CharField(
+        max_length=16,
+        choices=[("not_required", "Not required"), ("pending", "Pending"), ("ready", "Ready"), ("failed", "Failed")],
+        default="not_required",
+    )
+    registration_link_error = models.TextField(blank=True)
     status = models.CharField(max_length=16, default=STATUS_PENDING)
     completed_at = models.DateTimeField(null=True, blank=True)
     completion_source = models.CharField(max_length=40, blank=True)

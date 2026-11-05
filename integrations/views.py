@@ -16,14 +16,14 @@ from .models import FormCompletionEvent
 MAX_SKEW_SECONDS = 300
 
 def _valid_signature(raw_body, timestamp, supplied):
-    if not settings.FORM_CALLBACK_SECRET or not timestamp or not supplied:
+    if not settings.COSMIC_TOOLS_INTEGRATION_SECRET or not timestamp or not supplied:
         return False
     try:
         if abs(time.time() - int(timestamp)) > MAX_SKEW_SECONDS:
             return False
     except ValueError:
         return False
-    expected = hmac.new(settings.FORM_CALLBACK_SECRET.encode(), timestamp.encode() + b"." + raw_body, hashlib.sha256).hexdigest()
+    expected = hmac.new(settings.COSMIC_TOOLS_INTEGRATION_SECRET.encode(), timestamp.encode() + b"." + raw_body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, supplied.removeprefix("sha256="))
 
 @csrf_exempt
