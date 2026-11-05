@@ -97,7 +97,7 @@ COSMIC_TOOLS_REGISTRATION_API_URL=https://tools.cosmic135.com/integrations/regis
 
 In an offer, choose `Form` and enter the numeric **Cosmic Tools course / form ID**. After Stripe confirms payment, the worker asks Cosmic Tools to create one customer-specific registration link. Registration emails are queued only after that link is ready. Stripe and Celery retries are idempotent and cannot create duplicate links for the same journey.
 
-Cosmic Tools retains the `journey_token` with that link, then POSTs JSON to `/integrations/forms/completed/` after a successful form submission, with headers:
+Cosmic Tools retains the `journey_token` with that link, then POSTs JSON to `/api/integrations/forms/completed/` after a successful form submission, with headers:
 
 - `X-Cosmic-Timestamp`: current Unix timestamp
 - `X-Cosmic-Signature`: `sha256=` followed by the hex HMAC-SHA256 of `timestamp + "." + raw_request_body`
