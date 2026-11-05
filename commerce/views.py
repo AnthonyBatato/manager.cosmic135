@@ -66,6 +66,8 @@ def checkout_start(request, action_id):
         mode="payment",
         line_items=[{"price": price_id, "quantity": 1}],
         customer_creation="always",
+        name_collection={"individual": {"enabled": True, "optional": False}},
+        phone_number_collection={"enabled": True},
         locale="auto",
         client_reference_id=str(attempt.pk),
         metadata={

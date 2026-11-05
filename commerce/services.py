@@ -32,10 +32,26 @@ def process_checkout_event(event_record):
             event_record.error = ""
             event_record.save(update_fields=["processed_at", "error"])
             return None
-        email = (obj.get("customer_details") or {}).get("email") or obj.get("customer_email")
+        customer_details = obj.get("customer_details") or {}
+        email = customer_details.get("email") or obj.get("customer_email")
         if not email:
             raise ValueError("Stripe session did not provide a customer email.")
-        customer, _ = Customer.objects.get_or_create(email=email.lower(), defaults={"name": (obj.get("customer_details") or {}).get("name", "")})
+        customer, created_customer = Customer.objects.get_or_create(
+            email=email.lower(),
+            defaults={
+                "name": customer_details.get("name", ""),
+                "phone": customer_details.get("phone", ""),
+            },
+        )
+        if not created_customer:
+            updated_fields = []
+            for field in ("name", "phone"):
+                value = customer_details.get(field, "")
+                if value and getattr(customer, field) != value:
+                    setattr(customer, field, value)
+                    updated_fields.append(field)
+            if updated_fields:
+                customer.save(update_fields=[*updated_fields, "updated_at"])
         attempt.customer = customer
         attempt.status = CheckoutAttempt.STATUS_PAID
         attempt.save(update_fields=["customer", "status", "updated_at"])

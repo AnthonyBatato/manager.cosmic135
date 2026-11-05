@@ -20,12 +20,14 @@ class StripeEventTests(TestCase):
         offer = Offer.objects.create(name="Offer", destination_url="https://tools.cosmic135.com/register/test/")
         action = ActionMapping.objects.create(page=page, key="checkout", label="Buy", action_type="checkout", target_id=offer.pk)
         attempt = CheckoutAttempt.objects.create(page=page, action=action, offer=offer, stripe_session_id="cs_test")
-        payload = {"data": {"object": {"id": "cs_test", "payment_intent": "pi_test", "amount_total": 10000, "currency": "myr", "customer_details": {"email": "buyer@example.com", "name": "Buyer"}}}}
+        payload = {"data": {"object": {"id": "cs_test", "payment_intent": "pi_test", "amount_total": 10000, "currency": "myr", "customer_details": {"email": "buyer@example.com", "name": "Buyer", "phone": "+60123456789"}}}}
         event = StripeEvent.objects.create(event_id="evt_test", event_type="checkout.session.completed", payload=payload)
         journey = process_checkout_event(event)
         event.refresh_from_db()
         self.assertIsNotNone(event.processed_at)
         self.assertEqual(journey.customer.email, "buyer@example.com")
+        self.assertEqual(journey.customer.name, "Buyer")
+        self.assertEqual(journey.customer.phone, "+60123456789")
         self.assertEqual(Journey.objects.count(), 1)
         self.assertIsNone(process_checkout_event(event))
         schedule.assert_called_once()
@@ -217,6 +219,8 @@ class StripeCheckoutFlowTests(TestCase):
         self.assertRedirects(response, "https://checkout.stripe.test/session", fetch_redirect_response=False)
         kwargs = create_session.call_args.kwargs
         self.assertEqual(kwargs["line_items"], [{"price": "price_test_course", "quantity": 1}])
+        self.assertEqual(kwargs["name_collection"], {"individual": {"enabled": True, "optional": False}})
+        self.assertEqual(kwargs["phone_number_collection"], {"enabled": True})
         self.assertEqual(kwargs["success_url"], "https://go.example.com/payments/success/?session_id={CHECKOUT_SESSION_ID}")
         attempt = CheckoutAttempt.objects.get(stripe_session_id="cs_test_created")
         self.assertEqual(attempt.stripe_mode, "test")
