@@ -11,7 +11,13 @@ from .models import EmailDelivery
 @shared_task(bind=True, max_retries=5)
 def send_delivery(self, delivery_pk):
     with transaction.atomic():
-        delivery = EmailDelivery.objects.select_for_update().select_related("journey__customer", "booking__customer", "booking__booking_type", "template").get(pk=delivery_pk)
+        # Lock only the delivery row. Combining select_for_update() with the
+        # nullable journey/booking select_related() joins makes PostgreSQL try
+        # to lock the nullable side of an outer join, which it rejects.
+        delivery = EmailDelivery.objects.select_for_update().get(pk=delivery_pk)
+        delivery = EmailDelivery.objects.select_related(
+            "journey__customer", "booking__customer", "booking__booking_type", "template",
+        ).get(pk=delivery.pk)
         journey = delivery.journey
         booking = delivery.booking
         customer = journey.customer if journey else booking.customer

@@ -102,6 +102,7 @@ EMAIL_PORT = int(os.getenv("EMAIL_PORT", "25"))
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "0") == "1"
+EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "30"))
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "Cosmic135 <support@cosmic135.com>")
 
 CELERY_BROKER_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -109,6 +110,12 @@ CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_REJECT_ON_WORKER_LOST = True
 CELERY_TIMEZONE = TIME_ZONE
+# Reminder tasks can remain scheduled for seven days. Redis' default one-hour
+# visibility timeout causes those ETA tasks to be redelivered every hour, so
+# keep unacknowledged scheduled tasks invisible for eight days instead.
+CELERY_VISIBILITY_TIMEOUT = int(os.getenv("CELERY_VISIBILITY_TIMEOUT", "691200"))
+CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": CELERY_VISIBILITY_TIMEOUT}
+CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {"visibility_timeout": CELERY_VISIBILITY_TIMEOUT}
 CELERY_BEAT_SCHEDULE = {
     "clear-expired-booking-holds": {
         "task": "bookings.tasks.clear_expired_slot_holds", "schedule": 300.0,

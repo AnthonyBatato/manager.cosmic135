@@ -4,8 +4,10 @@ import stripe
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from automations.models import EmailDelivery, EmailTemplate, ReminderStep
 from automations.services import schedule_journey_emails
+from automations.tasks import send_delivery
 from pages.models import ActionMapping, AdTrackingSettings, LandingPage
 from users.models import ApprovedEmail
 from .models import AdConversionDelivery, CheckoutAttempt, Journey, Offer, Payment, StripeEvent
@@ -295,6 +297,31 @@ class PostPaymentEmailTests(TestCase):
             schedule_journey_emails(journey)
         self.assertEqual(EmailDelivery.objects.filter(journey=journey).count(), 3)
         self.assertEqual(dispatch.call_count, 3)
+
+    @override_settings(
+        STRIPE_PUBLIC_BASE_URL="https://go.example.com",
+        DEFAULT_FROM_EMAIL="Cosmic135 <support@example.com>",
+    )
+    @patch("automations.tasks.EmailMultiAlternatives.send", return_value=1)
+    def test_send_delivery_locks_only_delivery_and_marks_sent(self, send):
+        template = EmailTemplate.objects.create(
+            name="Registration", kind="action_request",
+            subject_en="Continue {{ customer.name }}", body_en="{{ action_url }}",
+        )
+        journey = self.make_journey(Offer.EMAIL_REGISTRATION)
+        journey.customer.name = "Buyer"
+        journey.customer.save(update_fields=["name"])
+        delivery = EmailDelivery.objects.create(
+            journey=journey, template=template, scheduled_for=timezone.now(),
+        )
+
+        send_delivery.run(delivery.pk)
+
+        delivery.refresh_from_db()
+        self.assertEqual(delivery.status, EmailDelivery.STATUS_SENT)
+        self.assertEqual(delivery.attempts, 1)
+        self.assertIsNotNone(delivery.sent_at)
+        send.assert_called_once_with()
 
 
 class PaymentSettingsTests(TestCase):
