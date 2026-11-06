@@ -2,12 +2,13 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 import stripe
 from django.contrib.auth import get_user_model
+from django.template import Context
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from automations.models import EmailDelivery, EmailTemplate, ReminderStep
 from automations.services import schedule_journey_emails
-from automations.tasks import send_delivery
+from automations.tasks import render_bilingual, send_delivery
 from pages.models import ActionMapping, AdTrackingSettings, LandingPage
 from users.models import ApprovedEmail
 from .models import AdConversionDelivery, CheckoutAttempt, Journey, Offer, Payment, StripeEvent
@@ -306,7 +307,8 @@ class PostPaymentEmailTests(TestCase):
     def test_send_delivery_locks_only_delivery_and_marks_sent(self, send):
         template = EmailTemplate.objects.create(
             name="Registration", kind="action_request",
-            subject_en="Continue {{ customer.name }}", body_en="{{ action_url }}",
+            subject_en="Continue {{ customer.name }}", subject_zh="请继续 {{ customer.name }}",
+            body_en="English {{ action_url }}", body_zh="中文 {{ action_url }}",
         )
         journey = self.make_journey(Offer.EMAIL_REGISTRATION)
         journey.customer.name = "Buyer"
@@ -322,6 +324,18 @@ class PostPaymentEmailTests(TestCase):
         self.assertEqual(delivery.attempts, 1)
         self.assertIsNotNone(delivery.sent_at)
         send.assert_called_once_with()
+
+    def test_bilingual_email_renders_chinese_before_english(self):
+        template = EmailTemplate.objects.create(
+            name="Bilingual", kind="action_request",
+            subject_en="English subject", subject_zh="中文主题",
+            body_en="English body", body_zh="中文内容",
+        )
+        subject, body = render_bilingual(template, Context({}))
+
+        self.assertEqual(subject, "中文主题 ｜ English subject")
+        self.assertLess(body.index("中文内容"), body.index("English body"))
+        self.assertIn("English 英文", body)
 
 
 class PaymentSettingsTests(TestCase):

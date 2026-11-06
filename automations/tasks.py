@@ -8,6 +8,20 @@ from django.utils import timezone
 import smtplib
 from .models import EmailDelivery
 
+
+def render_bilingual(template, context):
+    """Render Chinese first and English second for every automated email."""
+    subject_zh = Template(template.subject_zh).render(context).strip()
+    subject_en = Template(template.subject_en).render(context).strip()
+    body_zh = Template(template.body_zh).render(context).strip()
+    body_en = Template(template.body_en).render(context).strip()
+
+    subject_parts = [part for part in (subject_zh, subject_en) if part]
+    body_parts = [part for part in (body_zh, body_en) if part]
+    subject = " ｜ ".join(subject_parts)
+    body = "\n\n────────── English 英文 ──────────\n\n".join(body_parts)
+    return subject, body
+
 @shared_task(bind=True, max_retries=5)
 def send_delivery(self, delivery_pk):
     with transaction.atomic():
@@ -38,11 +52,7 @@ def send_delivery(self, delivery_pk):
     payment = journey.payment if journey else None
     offer = payment.attempt.offer if payment else None
     context = Context({"customer": customer, "journey": journey, "payment": payment, "offer": offer, "booking": booking, "action_url": action_url})
-    use_zh = customer.preferred_language == "zh"
-    subject_source = delivery.template.subject_zh if use_zh and delivery.template.subject_zh else delivery.template.subject_en
-    body_source = delivery.template.body_zh if use_zh and delivery.template.body_zh else delivery.template.body_en
-    subject = Template(subject_source).render(context)
-    body = Template(body_source).render(context)
+    subject, body = render_bilingual(delivery.template, context)
     try:
         message = EmailMultiAlternatives(subject, body, settings.DEFAULT_FROM_EMAIL, [customer.email])
         count = message.send()

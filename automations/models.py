@@ -5,9 +5,9 @@ class EmailTemplate(models.Model):
     name = models.CharField(max_length=120)
     kind = models.CharField(max_length=40, choices=KIND_CHOICES)
     subject_en = models.CharField(max_length=250)
-    subject_zh = models.CharField(max_length=250, blank=True)
+    subject_zh = models.CharField(max_length=250)
     body_en = models.TextField()
-    body_zh = models.TextField(blank=True)
+    body_zh = models.TextField()
     active = models.BooleanField(default=True)
     def __str__(self): return self.name
 
