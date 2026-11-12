@@ -22,10 +22,10 @@ class Command(BaseCommand):
             user.set_password(options["password"])
             user.save()
         template, _ = EmailTemplate.objects.update_or_create(kind="action_request", name="Complete your next step", defaults={
-            "subject_en": "Your next step with Cosmic135",
-            "subject_zh": "您在 Cosmic135 的下一步",
-            "body_en": "Hello {{ customer.name|default:customer.email }},\n\nYour payment is confirmed. Complete your next step here:\n{{ action_url }}\n\nReply to this email if you need help.",
-            "body_zh": "您好，\n\n您的付款已确认。请在此完成下一步：\n{{ action_url }}\n\n如需帮助，请回复此邮件。",
+            "subject_en": "Payment confirmed — complete your registration",
+            "subject_zh": "付款已确认｜请完成报名",
+            "body_en": "Hello {{ customer.name|default:customer.email }},\n\nThank you. Your payment for {{ offer.name }} has been confirmed.\n\nPlease complete the participant registration form(s):\n{% for registration in registration_links %}Participant {{ forloop.counter }}: {{ registration.registration_url }}\n{% empty %}{{ action_url }}\n{% endfor %}\nReply to this email if you need help.",
+            "body_zh": "您好 {{ customer.name|default:customer.email }}，\n\n谢谢。您购买 {{ offer.name }} 的付款已确认。\n\n请分别完成以下参加者报名表：\n{% for registration in registration_links %}参加者 {{ forloop.counter }}：{{ registration.registration_url }}\n{% empty %}{{ action_url }}\n{% endfor %}\n如需帮助，请回复此邮件。",
             "active": True,
         })
         reminder, _ = EmailTemplate.objects.update_or_create(kind="reminder", name="Action reminder", defaults={

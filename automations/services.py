@@ -6,13 +6,18 @@ from .models import EmailDelivery, EmailTemplate, ReminderStep
 def schedule_journey_emails(journey):
     now = timezone.now()
     email_mode = journey.payment.attempt.offer.post_payment_email
-    immediate_kinds = {
-        "confirmation": ["payment_confirmation"],
-        "registration": ["action_request"],
-        "both": ["payment_confirmation", "action_request"],
-    }.get(email_mode, ["action_request"])
-    for immediate in EmailTemplate.objects.filter(kind__in=immediate_kinds, active=True):
-        delivery, created = EmailDelivery.objects.get_or_create(journey=journey, template=immediate, reminder_step=None, defaults={"scheduled_for": now})
+    # Registration modes use one combined email: payment confirmation plus the
+    # customer-specific next-step link. Selecting a single template also keeps
+    # duplicate active templates from producing duplicate customer emails.
+    immediate_kind = "payment_confirmation" if email_mode == "confirmation" else "action_request"
+    immediate = EmailTemplate.objects.filter(kind=immediate_kind, active=True).order_by("pk").first()
+    if immediate:
+        delivery, created = EmailDelivery.objects.get_or_create(
+            journey=journey,
+            template=immediate,
+            reminder_step=None,
+            defaults={"scheduled_for": now},
+        )
         if created:
             transaction.on_commit(lambda pk=delivery.pk: _dispatch(pk, now))
     if email_mode == "confirmation":

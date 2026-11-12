@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Participant registration · Cosmic Launch{% endblock %}
+{% block content %}
+<div class="public-message">
+  <p class="eyebrow">PAYMENT RECEIVED · 付款已确认</p>
+  <h1>Complete each participant’s registration.</h1>
+  <p>请为每位参加者分别填写一份报名表。Each participant must use a separate form.</p>
+  <div class="stack">
+    {% for seat in registration_seats %}
+      <a class="button primary" href="{{ seat.registration_url }}">
+        参加者 {{ seat.seat_number }} · Participant {{ seat.seat_number }}
+      </a>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

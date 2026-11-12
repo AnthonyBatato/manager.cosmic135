@@ -76,6 +76,7 @@ class StripeEventTests(TestCase):
         page = LandingPage.objects.create(name="Integrated", slug="integrated")
         offer = Offer.objects.create(
             name="Course", cosmic_tools_course_id=42,
+            registration_quantity=2,
             destination_url="https://tools.example/register/generic-course/",
         )
         action = ActionMapping.objects.create(
@@ -93,6 +94,7 @@ class StripeEventTests(TestCase):
         with self.captureOnCommitCallbacks(execute=True):
             journey = process_checkout_event(event)
         self.assertEqual(journey.cosmic_tools_course_id, 42)
+        self.assertEqual(journey.registration_quantity, 2)
         self.assertEqual(journey.registration_link_status, "pending")
         self.assertEqual(journey.destination_url, "")
         provision.assert_called_once_with(journey.pk)
@@ -288,16 +290,31 @@ class PostPaymentEmailTests(TestCase):
         self.assertEqual(dispatch.call_count, 1)
 
     @patch("automations.services._dispatch")
-    def test_both_sends_confirmation_registration_and_reminder(self, dispatch):
+    def test_both_sends_one_combined_email_and_reminder(self, dispatch):
         EmailTemplate.objects.create(name="Confirmed", kind="payment_confirmation", subject_en="Paid", body_en="Thanks")
-        EmailTemplate.objects.create(name="Register", kind="action_request", subject_en="Register", body_en="Continue")
+        combined = EmailTemplate.objects.create(name="Register", kind="action_request", subject_en="Paid and register", body_en="Continue")
         reminder = EmailTemplate.objects.create(name="Reminder", kind="reminder", subject_en="Reminder", body_en="Continue")
         ReminderStep.objects.create(name="24 hours", delay_hours=24, template=reminder)
         journey = self.make_journey(Offer.EMAIL_BOTH)
         with self.captureOnCommitCallbacks(execute=True):
             schedule_journey_emails(journey)
-        self.assertEqual(EmailDelivery.objects.filter(journey=journey).count(), 3)
-        self.assertEqual(dispatch.call_count, 3)
+        deliveries = EmailDelivery.objects.filter(journey=journey)
+        self.assertEqual(deliveries.count(), 2)
+        self.assertEqual(deliveries.filter(reminder_step__isnull=True).get().template, combined)
+        self.assertEqual(dispatch.call_count, 2)
+
+    @patch("automations.services._dispatch")
+    def test_combined_mode_selects_only_one_active_immediate_template(self, dispatch):
+        first = EmailTemplate.objects.create(name="First", kind="action_request", subject_en="First", body_en="First")
+        EmailTemplate.objects.create(name="Second", kind="action_request", subject_en="Second", body_en="Second")
+        journey = self.make_journey(Offer.EMAIL_BOTH)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            schedule_journey_emails(journey)
+
+        immediate = EmailDelivery.objects.get(journey=journey, reminder_step__isnull=True)
+        self.assertEqual(immediate.template, first)
+        self.assertEqual(dispatch.call_count, 1)
 
     @override_settings(
         STRIPE_PUBLIC_BASE_URL="https://go.example.com",
@@ -336,6 +353,30 @@ class PostPaymentEmailTests(TestCase):
         self.assertEqual(subject, "中文主题 ｜ English subject")
         self.assertLess(body.index("中文内容"), body.index("English body"))
         self.assertIn("English 英文", body)
+
+    def test_offer_specific_combined_template_renders_all_registration_links(self):
+        template = EmailTemplate.objects.create(
+            name="Default", kind="action_request",
+            subject_en="Default", subject_zh="默认",
+            body_en="Default", body_zh="默认",
+        )
+        offer = Offer.objects.create(
+            name="Taipei Duo",
+            email_subject_zh="付款已确认｜请完成报名",
+            email_subject_en="Payment confirmed | Complete registration",
+            email_body_zh="{% for link in registration_links %}参加者 {{ forloop.counter }}：{{ link.registration_url }}\n{% endfor %}",
+            email_body_en="{% for link in registration_links %}Participant {{ forloop.counter }}: {{ link.registration_url }}\n{% endfor %}",
+        )
+        links = [
+            SimpleNamespace(registration_url="https://tools.example/one/"),
+            SimpleNamespace(registration_url="https://tools.example/two/"),
+        ]
+
+        subject, body = render_bilingual(template, Context({"registration_links": links}), offer=offer)
+
+        self.assertIn("付款已确认", subject)
+        self.assertIn("参加者 1：https://tools.example/one/", body)
+        self.assertIn("Participant 2: https://tools.example/two/", body)
 
 
 class PaymentSettingsTests(TestCase):

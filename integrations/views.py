@@ -11,7 +11,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from automations.services import cancel_journey_emails
 from commerce.models import Journey
-from .models import FormCompletionEvent
+from .models import FormCompletionEvent, RegistrationSeat
 
 MAX_SKEW_SECONDS = 300
 
@@ -42,11 +42,30 @@ def form_completed(request):
     except (KeyError, ValueError, TypeError, json.JSONDecodeError):
         return JsonResponse({"error": "Invalid payload"}, status=400)
     with transaction.atomic():
-        journey = Journey.objects.select_for_update().filter(token=data.get("journey_token")).first()
+        token = data.get("journey_token")
+        seat = RegistrationSeat.objects.select_for_update().select_related("journey").filter(token=token).first()
+        journey = (
+            Journey.objects.select_for_update().get(pk=seat.journey_id)
+            if seat
+            else Journey.objects.select_for_update().filter(token=token).first()
+        )
         if not journey:
             return JsonResponse({"error": "Unknown journey"}, status=404)
-        event, created = FormCompletionEvent.objects.get_or_create(event_id=data.get("event_id", ""), defaults={"journey": journey, "submission_id": data.get("submission_id", ""), "completed_at": completed_at})
-        if created and journey.status == Journey.STATUS_PENDING:
+        event, created = FormCompletionEvent.objects.get_or_create(
+            event_id=data.get("event_id", ""),
+            defaults={
+                "journey": journey,
+                "seat": seat,
+                "submission_id": data.get("submission_id", ""),
+                "completed_at": completed_at,
+            },
+        )
+        if created and seat and not seat.completed_at:
+            seat.completed_at = completed_at
+            seat.submission_id = data.get("submission_id", "")
+            seat.save(update_fields=["completed_at", "submission_id"])
+        all_complete = not seat or not journey.registration_seats.filter(completed_at__isnull=True).exists()
+        if created and all_complete and journey.status == Journey.STATUS_PENDING:
             journey.status = Journey.STATUS_COMPLETED
             journey.completed_at = completed_at
             journey.completion_source = "form"

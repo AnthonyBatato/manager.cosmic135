@@ -121,6 +121,14 @@ def continue_journey(request, token):
         return render(request, "commerce/complete.html", {"journey": journey})
     if journey.destination_type == "booking" and journey.destination_id:
         return redirect("booking_with_journey", booking_type_id=journey.destination_id, journey_token=journey.token)
+    registration_seats = list(journey.registration_seats.filter(link_status="ready").order_by("seat_number"))
+    if len(registration_seats) > 1:
+        return render(request, "commerce/registration_links.html", {
+            "journey": journey,
+            "registration_seats": registration_seats,
+        })
+    if registration_seats:
+        return redirect(registration_seats[0].registration_url)
     if journey.destination_url:
         joiner = "&" if "?" in journey.destination_url else "?"
         return redirect(f"{journey.destination_url}{joiner}journey_token={journey.token}")

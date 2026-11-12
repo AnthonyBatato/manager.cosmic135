@@ -66,6 +66,7 @@ def process_checkout_event(event_record):
             "destination_id": attempt.offer.destination_id,
             "destination_url": "" if attempt.offer.cosmic_tools_course_id else attempt.offer.destination_url,
             "cosmic_tools_course_id": attempt.offer.cosmic_tools_course_id,
+            "registration_quantity": attempt.offer.registration_quantity,
             "registration_link_status": "pending" if attempt.offer.cosmic_tools_course_id else "not_required",
         })
         if created:

@@ -12,7 +12,7 @@ class Offer(models.Model):
     EMAIL_CHOICES = [
         (EMAIL_CONFIRMATION, "Confirmation email"),
         (EMAIL_REGISTRATION, "Registration / next-step email"),
-        (EMAIL_BOTH, "Both emails"),
+        (EMAIL_BOTH, "Payment confirmation + registration (one email)"),
     ]
     name = models.CharField(max_length=160)
     stripe_price_id = models.CharField(max_length=120, blank=True)
@@ -28,7 +28,15 @@ class Offer(models.Model):
         blank=True,
         help_text="Course / form ID in Cosmic Tools. A customer-specific registration link is created after payment.",
     )
+    registration_quantity = models.PositiveSmallIntegerField(
+        default=1,
+        help_text="Number of separate participant registration links created after payment.",
+    )
     post_payment_email = models.CharField(max_length=20, choices=EMAIL_CHOICES, default=EMAIL_REGISTRATION)
+    email_subject_zh = models.CharField(max_length=250, blank=True)
+    email_subject_en = models.CharField(max_length=250, blank=True)
+    email_body_zh = models.TextField(blank=True)
+    email_body_en = models.TextField(blank=True)
     active = models.BooleanField(default=True)
     def stripe_price_for_mode(self, mode):
         if mode == "live":
@@ -92,6 +100,7 @@ class Journey(models.Model):
     destination_id = models.PositiveBigIntegerField(null=True, blank=True)
     destination_url = models.URLField(blank=True)
     cosmic_tools_course_id = models.PositiveBigIntegerField(null=True, blank=True)
+    registration_quantity = models.PositiveSmallIntegerField(default=1)
     registration_link_status = models.CharField(
         max_length=16,
         choices=[("not_required", "Not required"), ("pending", "Pending"), ("ready", "Ready"), ("failed", "Failed")],

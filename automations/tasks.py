@@ -9,12 +9,17 @@ import smtplib
 from .models import EmailDelivery
 
 
-def render_bilingual(template, context):
+def render_bilingual(template, context, offer=None):
     """Render Chinese first and English second for every automated email."""
-    subject_zh = Template(template.subject_zh).render(context).strip()
-    subject_en = Template(template.subject_en).render(context).strip()
-    body_zh = Template(template.body_zh).render(context).strip()
-    body_en = Template(template.body_en).render(context).strip()
+    use_offer_override = bool(offer and template.kind == "action_request" and (offer.email_body_zh or offer.email_body_en))
+    subject_zh_source = (offer.email_subject_zh or template.subject_zh) if use_offer_override else template.subject_zh
+    subject_en_source = (offer.email_subject_en or template.subject_en) if use_offer_override else template.subject_en
+    body_zh_source = (offer.email_body_zh or template.body_zh) if use_offer_override else template.body_zh
+    body_en_source = (offer.email_body_en or template.body_en) if use_offer_override else template.body_en
+    subject_zh = Template(subject_zh_source).render(context).strip()
+    subject_en = Template(subject_en_source).render(context).strip()
+    body_zh = Template(body_zh_source).render(context).strip()
+    body_en = Template(body_en_source).render(context).strip()
 
     subject_parts = [part for part in (subject_zh, subject_en) if part]
     body_parts = [part for part in (body_zh, body_en) if part]
@@ -51,8 +56,17 @@ def send_delivery(self, delivery_pk):
         action_url = f"https://{settings.PUBLIC_ROOT_HOST}{reverse('booking_confirmed', kwargs={'token': booking.cancellation_token})}"
     payment = journey.payment if journey else None
     offer = payment.attempt.offer if payment else None
-    context = Context({"customer": customer, "journey": journey, "payment": payment, "offer": offer, "booking": booking, "action_url": action_url})
-    subject, body = render_bilingual(delivery.template, context)
+    registration_links = list(journey.registration_seats.filter(link_status="ready").order_by("seat_number")) if journey else []
+    context = Context({
+        "customer": customer,
+        "journey": journey,
+        "payment": payment,
+        "offer": offer,
+        "booking": booking,
+        "action_url": action_url,
+        "registration_links": registration_links,
+    })
+    subject, body = render_bilingual(delivery.template, context, offer=offer)
     try:
         message = EmailMultiAlternatives(subject, body, settings.DEFAULT_FROM_EMAIL, [customer.email])
         count = message.send()
