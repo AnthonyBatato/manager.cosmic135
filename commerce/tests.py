@@ -352,7 +352,7 @@ class PostPaymentEmailTests(TestCase):
 
         self.assertEqual(subject, "中文主题 ｜ English subject")
         self.assertLess(body.index("中文内容"), body.index("English body"))
-        self.assertIn("English 英文", body)
+        self.assertIn("⸻", body)
 
     def test_offer_specific_combined_template_renders_all_registration_links(self):
         template = EmailTemplate.objects.create(

@@ -24,7 +24,7 @@ def render_bilingual(template, context, offer=None):
     subject_parts = [part for part in (subject_zh, subject_en) if part]
     body_parts = [part for part in (body_zh, body_en) if part]
     subject = " ｜ ".join(subject_parts)
-    body = "\n\n────────── English 英文 ──────────\n\n".join(body_parts)
+    body = "\n\n⸻\n\n".join(body_parts)
     return subject, body
 
 @shared_task(bind=True, max_retries=5)
