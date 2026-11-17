@@ -1,3 +1,5 @@
+from pathlib import Path
+import tempfile
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 import stripe
@@ -9,9 +11,10 @@ from django.utils import timezone
 from automations.models import EmailDelivery, EmailTemplate, ReminderStep
 from automations.services import schedule_journey_emails
 from automations.tasks import render_bilingual, send_delivery
-from pages.models import ActionMapping, AdTrackingSettings, LandingPage
+from integrations.models import RegistrationSeat
+from pages.models import ActionMapping, AdTrackingSettings, LandingPage, PageVersion
 from users.models import ApprovedEmail
-from .models import AdConversionDelivery, CheckoutAttempt, Journey, Offer, Payment, StripeEvent
+from .models import AdConversionDelivery, CheckoutAttempt, Customer, Journey, Offer, Payment, StripeEvent
 from .services import process_checkout_event
 from .tasks import dispatch_pending_ad_conversions, send_ad_conversion
 from .tracking import queue_purchase_conversion
@@ -215,6 +218,54 @@ class StripeCheckoutFlowTests(TestCase):
         self.action = ActionMapping.objects.create(
             page=self.page, key="checkout", label="Buy", action_type="checkout", target_id=self.offer.pk,
         )
+
+    def test_uploaded_thank_you_design_injects_verified_registration_links(self):
+        customer = Customer.objects.create(email="buyer@example.com")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            artifact = root / "thank-you" / "v1"
+            artifact.mkdir(parents=True)
+            (artifact / "index.html").write_text(
+                '<!doctype html><html><head></head><body><main><h1>Custom design</h1>'
+                '<div data-lpm-slot="registration-actions"><a href="https://line.example">Join group</a></div>'
+                '</main></body></html>',
+                encoding="utf-8",
+            )
+            (artifact / "style.css").write_text("body{}", encoding="utf-8")
+            design = LandingPage.objects.create(name="Thank you", slug="custom-thanks", source_type="upload")
+            version = PageVersion.objects.create(page=design, number=1, artifact_path="thank-you/v1")
+            design.current_version = version
+            design.save(update_fields=["current_version"])
+            self.offer.thank_you_page = design
+            self.offer.save(update_fields=["thank_you_page"])
+            attempt = CheckoutAttempt.objects.create(
+                page=self.page, action=self.action, offer=self.offer,
+                stripe_session_id="cs_custom_thanks", status=CheckoutAttempt.STATUS_PAID,
+            )
+            payment = Payment.objects.create(attempt=attempt, amount_total=738000, currency="twd")
+            journey = Journey.objects.create(payment=payment, customer=customer, registration_quantity=2)
+            RegistrationSeat.objects.create(
+                journey=journey, seat_number=1, link_status="ready",
+                registration_url="https://tools.example/register/one/",
+            )
+            RegistrationSeat.objects.create(
+                journey=journey, seat_number=2, link_status="ready",
+                registration_url="https://tools.example/register/two/",
+            )
+            with override_settings(PUBLISHED_ROOT=root):
+                response = self.client.get(reverse("checkout_success"), {"session_id": attempt.stripe_session_id})
+                asset = self.client.get(reverse("checkout_success_asset", kwargs={
+                    "session_id": attempt.stripe_session_id, "path": "style.css",
+                }))
+                asset.close()
+
+        self.assertContains(response, "Custom design")
+        self.assertContains(response, "Participant 1")
+        self.assertContains(response, "Participant 2")
+        self.assertContains(response, "https://tools.example/register/one/")
+        self.assertContains(response, "https://tools.example/register/two/")
+        self.assertContains(response, "Join group")
+        self.assertEqual(asset.status_code, 200)
 
     @override_settings(
         STRIPE_MODE="test", STRIPE_SECRET_KEY="sk_test_private",

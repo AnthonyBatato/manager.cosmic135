@@ -1,17 +1,95 @@
+import html
+import mimetypes
+import re
+
 import stripe
 from django.conf import settings
 from django.contrib import messages
-from django.http import Http404, HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from pages.models import ActionMapping
+from pages.services import render_builder, serve_file_path
 from pages.tracking import purchase_tracking_markup
 from users.auth import owner_required
 from .forms import OfferForm
 from .models import CheckoutAttempt, Journey, Offer, StripeEvent
 from .tasks import process_stripe_event
+
+
+def _registration_actions(journey):
+    seats = list(journey.registration_seats.filter(link_status="ready").order_by("seat_number"))
+    if seats:
+        links = []
+        multiple = len(seats) > 1
+        for seat in seats:
+            label = (
+                f"參加者 {seat.seat_number} 登記 · Participant {seat.seat_number}"
+                if multiple else "填寫入場券資料 · Complete registration"
+            )
+            links.append(
+                f'<a class="btn btn-primary lpm-registration-action" href="{html.escape(seat.registration_url, quote=True)}">'
+                f"{html.escape(label)}</a>"
+            )
+        prompt = "請完成每位參加者的入場券登記。<br>Complete the entry-ticket registration for each participant."
+        return f'<p class="next lpm-registration-note" style="margin:0 0 8px">{prompt}</p>' + "".join(links)
+    continue_url = reverse("continue_journey", kwargs={"token": journey.token})
+    return (
+        '<p class="next lpm-registration-note" style="margin:0 0 8px">'
+        "正在準備您的專屬登記連結。<br>We are preparing your personal registration link.</p>"
+        f'<a class="btn btn-primary lpm-registration-action" href="{html.escape(continue_url, quote=True)}">'
+        "再次檢查 · Check again</a>"
+    )
+
+
+def _custom_success_response(request, attempt, journey, payment, page):
+    version = page.published_version or page.current_version
+    if not version:
+        return None
+    if version.blocks:
+        source = render_builder(version.blocks, page)
+    else:
+        try:
+            path = serve_file_path(version)
+        except FileNotFoundError:
+            return None
+        if not path.is_file():
+            return None
+        source = path.read_text(encoding="utf-8")
+        asset_url = reverse(
+            "checkout_success_asset",
+            kwargs={"session_id": attempt.stripe_session_id, "path": "__asset__"},
+        ).replace("__asset__", "")
+        source = re.sub(
+            r"<head(\s[^>]*)?>",
+            lambda match: match.group(0) + f'<base href="{asset_url}">',
+            source,
+            count=1,
+            flags=re.I,
+        )
+    actions = _registration_actions(journey)
+    slot = re.compile(
+        r'(<(?:div|section|nav)\b[^>]*data-lpm-slot=["\']registration-actions["\'][^>]*>)',
+        re.I,
+    )
+    if slot.search(source):
+        source = slot.sub(lambda match: match.group(1) + actions, source, count=1)
+    else:
+        legacy_actions = re.compile(r'(<div\b[^>]*class=["\'][^"\']*\bactions\b[^"\']*["\'][^>]*>)', re.I)
+        if legacy_actions.search(source):
+            source = legacy_actions.sub(lambda match: match.group(1) + actions, source, count=1)
+        else:
+            source = re.sub(r"</main>", actions + "</main>", source, count=1, flags=re.I)
+    tracking = purchase_tracking_markup(payment, request)
+    if tracking:
+        source = re.sub(r"</head>", tracking + "</head>", source, count=1, flags=re.I)
+    return HttpResponse(
+        source,
+        content_type="text/html; charset=utf-8",
+        headers={"Content-Security-Policy": "frame-ancestors 'self' https://manager.cosmic135.com"},
+    )
 
 
 @owner_required
@@ -88,14 +166,44 @@ def checkout_start(request, action_id):
 
 def checkout_success(request):
     session_id = request.GET.get("session_id", "")
-    attempt = CheckoutAttempt.objects.filter(stripe_session_id=session_id).select_related("payment__journey").first()
+    attempt = CheckoutAttempt.objects.filter(stripe_session_id=session_id).select_related(
+        "payment__journey", "offer__thank_you_page__published_version", "offer__thank_you_page__current_version",
+    ).first()
     journey = getattr(getattr(attempt, "payment", None), "journey", None) if attempt else None
     payment = getattr(attempt, "payment", None) if attempt else None
+    thank_you_page = attempt.offer.thank_you_page if attempt else None
+    if journey and payment and thank_you_page:
+        custom = _custom_success_response(request, attempt, journey, payment, thank_you_page)
+        if custom is not None:
+            return custom
     return render(request, "commerce/success.html", {
         "attempt": attempt, "journey": journey,
         "status_url": f"{reverse('checkout_status')}?session_id={session_id}",
         "purchase_tracking_markup": purchase_tracking_markup(payment, request) if payment else "",
     })
+
+
+def checkout_success_asset(request, session_id, path):
+    attempt = get_object_or_404(
+        CheckoutAttempt.objects.select_related(
+            "offer__thank_you_page__published_version", "offer__thank_you_page__current_version",
+        ),
+        stripe_session_id=session_id,
+        status=CheckoutAttempt.STATUS_PAID,
+    )
+    page = attempt.offer.thank_you_page
+    if not page:
+        raise Http404
+    version = page.published_version or page.current_version
+    if not version or not version.artifact_path:
+        raise Http404
+    try:
+        target = serve_file_path(version, path)
+    except FileNotFoundError:
+        raise Http404
+    if not target.is_file():
+        raise Http404
+    return FileResponse(target.open("rb"), content_type=mimetypes.guess_type(target.name)[0] or "application/octet-stream")
 
 
 def checkout_status(request):

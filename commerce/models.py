@@ -19,6 +19,14 @@ class Offer(models.Model):
     stripe_test_price_id = models.CharField(max_length=120, blank=True)
     stripe_live_price_id = models.CharField(max_length=120, blank=True)
     external_checkout_url = models.URLField(blank=True)
+    thank_you_page = models.ForeignKey(
+        "pages.LandingPage",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="thank_you_offers",
+        help_text="Optional uploaded landing page used as this offer's post-payment design.",
+    )
     currency = models.CharField(max_length=3, default="MYR")
     destination_type = models.CharField(max_length=16, choices=[("form", "Form"), ("booking", "Booking")], default="form")
     destination_id = models.PositiveBigIntegerField(null=True, blank=True)

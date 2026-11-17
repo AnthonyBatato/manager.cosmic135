@@ -9,6 +9,7 @@ class OfferForm(forms.ModelForm):
         model = Offer
         fields = [
             "name", "currency", "stripe_test_price_id", "stripe_live_price_id",
+            "thank_you_page",
             "destination_type", "destination_id", "cosmic_tools_course_id", "destination_url",
             "registration_quantity", "post_payment_email",
             "email_subject_zh", "email_body_zh", "email_subject_en", "email_body_en",
@@ -20,6 +21,7 @@ class OfferForm(forms.ModelForm):
             "destination_id": "Booking type ID",
             "cosmic_tools_course_id": "Cosmic Tools course / form ID",
             "registration_quantity": "Participant registration links",
+            "thank_you_page": "Thank-you design page",
             "destination_url": "Registration form URL",
             "post_payment_email": "Email after payment",
             "email_subject_zh": "Chinese email subject (optional override)",
@@ -32,6 +34,7 @@ class OfferForm(forms.ModelForm):
             "stripe_live_price_id": "Starts with price_. Add this only when the live product is ready.",
             "cosmic_tools_course_id": "Recommended for Cosmic Tools. A unique customer registration link is generated after Stripe confirms payment.",
             "registration_quantity": "Use 1 for a single ticket and 2 for a duo ticket.",
+            "thank_you_page": "Create or upload the design under Landing Pages, then select it here. The verified registration buttons are inserted automatically.",
             "email_body_zh": "Leave blank to use the default template. Supports {{ offer.name }}, {{ action_url }}, and registration_links template loops.",
             "email_body_en": "Leave blank to use the default template. Supports {{ offer.name }}, {{ action_url }}, and registration_links template loops.",
             "destination_url": "Fallback: use an existing registration form URL when Cosmic Tools automation is not selected.",
