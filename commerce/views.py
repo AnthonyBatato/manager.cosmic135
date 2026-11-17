@@ -30,18 +30,26 @@ def _registration_actions(journey):
                 if multiple else "填寫入場券資料 · Complete registration"
             )
             links.append(
-                f'<a class="btn btn-primary lpm-registration-action" href="{html.escape(seat.registration_url, quote=True)}">'
+                f'<a class="btn btn-primary lpm-registration-action" href="{html.escape(seat.registration_url, quote=True)}" target="_blank" rel="noopener">'
                 f"{html.escape(label)}</a>"
             )
         prompt = "請完成每位參加者的入場券登記。<br>Complete the entry-ticket registration for each participant."
-        return f'<p class="next lpm-registration-note" style="margin:0 0 8px">{prompt}</p>' + "".join(links)
+        email_note = "付款確認及登記連結亦已寄送至您的電子郵件。<br>A confirmation email with the registration link(s) has also been sent to you."
+        return (
+            f'<p class="next lpm-registration-note" style="margin:0 0 8px">{prompt}</p>'
+            + "".join(links)
+            + f'<p class="next lpm-email-note" style="margin:8px 0 0">{email_note}</p>'
+        )
     continue_url = reverse("continue_journey", kwargs={"token": journey.token})
     if journey.destination_url or journey.destination_id or journey.registration_link_status == "ready":
         return (
             '<p class="next lpm-registration-note" style="margin:0 0 8px">'
             "請完成您的入場券登記。<br>Complete your entry-ticket registration.</p>"
-            f'<a class="btn btn-primary lpm-registration-action" href="{html.escape(continue_url, quote=True)}">'
+            f'<a class="btn btn-primary lpm-registration-action" href="{html.escape(continue_url, quote=True)}" target="_blank" rel="noopener">'
             "填寫入場券資料 · Complete registration</a>"
+            '<p class="next lpm-email-note" style="margin:8px 0 0">'
+            "付款確認及登記連結亦已寄送至您的電子郵件。<br>"
+            "A confirmation email with the registration link has also been sent to you.</p>"
         )
     return (
         '<p class="next lpm-registration-note" style="margin:0 0 8px">'

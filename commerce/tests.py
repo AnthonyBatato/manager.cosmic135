@@ -264,6 +264,9 @@ class StripeCheckoutFlowTests(TestCase):
         self.assertContains(response, "Participant 2")
         self.assertContains(response, "https://tools.example/register/one/")
         self.assertContains(response, "https://tools.example/register/two/")
+        self.assertContains(response, 'target="_blank"')
+        self.assertContains(response, "付款確認及登記連結亦已寄送至您的電子郵件")
+        self.assertContains(response, "A confirmation email with the registration link(s) has also been sent to you.")
         self.assertContains(response, "Join group")
         self.assertEqual(asset.status_code, 200)
 
