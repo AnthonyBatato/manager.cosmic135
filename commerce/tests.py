@@ -178,6 +178,9 @@ class StripeEventTests(TestCase):
         url = reverse("checkout_success") + "?session_id=cs_success"
         without_consent = self.client.get(url)
         self.assertNotContains(without_consent, "cosmic-purchase-tracking")
+        self.assertContains(without_consent, "付款已確認")
+        self.assertContains(without_consent, "感謝您！")
+        self.assertContains(without_consent, "Thank you.")
         self.client.cookies[f"cosmic_ads_consent_{page.pk}"] = "granted"
         with_consent = self.client.get(url)
         self.assertContains(with_consent, "cosmic-purchase-tracking")
