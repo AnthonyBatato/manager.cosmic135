@@ -36,6 +36,13 @@ def _registration_actions(journey):
         prompt = "請完成每位參加者的入場券登記。<br>Complete the entry-ticket registration for each participant."
         return f'<p class="next lpm-registration-note" style="margin:0 0 8px">{prompt}</p>' + "".join(links)
     continue_url = reverse("continue_journey", kwargs={"token": journey.token})
+    if journey.destination_url or journey.destination_id or journey.registration_link_status == "ready":
+        return (
+            '<p class="next lpm-registration-note" style="margin:0 0 8px">'
+            "請完成您的入場券登記。<br>Complete your entry-ticket registration.</p>"
+            f'<a class="btn btn-primary lpm-registration-action" href="{html.escape(continue_url, quote=True)}">'
+            "填寫入場券資料 · Complete registration</a>"
+        )
     return (
         '<p class="next lpm-registration-note" style="margin:0 0 8px">'
         "正在準備您的專屬登記連結。<br>We are preparing your personal registration link.</p>"
