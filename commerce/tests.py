@@ -38,6 +38,30 @@ class StripeEventTests(TestCase):
         self.assertIsNone(process_checkout_event(event))
         schedule.assert_called_once()
 
+    def test_live_event_cannot_complete_test_checkout(self):
+        page = LandingPage.objects.create(name="Mode guard", slug="mode-guard")
+        offer = Offer.objects.create(name="Offer")
+        action = ActionMapping.objects.create(
+            page=page, key="checkout", label="Buy", action_type="checkout", target_id=offer.pk,
+        )
+        CheckoutAttempt.objects.create(
+            page=page, action=action, offer=offer,
+            stripe_session_id="cs_mode_guard", stripe_mode="test",
+        )
+        event = StripeEvent.objects.create(
+            event_id="evt_live_mode_guard", event_type="checkout.session.completed", livemode=True,
+            payload={"data": {"object": {
+                "id": "cs_mode_guard", "payment_status": "paid",
+                "customer_details": {"email": "buyer@example.com"},
+            }}},
+        )
+
+        with self.assertRaisesMessage(ValueError, "does not match checkout attempt mode"):
+            process_checkout_event(event)
+
+        self.assertFalse(Payment.objects.exists())
+        self.assertFalse(Journey.objects.exists())
+
     @patch("automations.services.schedule_journey_emails")
     def test_refund_before_checkout_completion_is_reconciled(self, schedule):
         page = LandingPage.objects.create(name="Page", slug="page")
@@ -444,3 +468,4 @@ class PaymentSettingsTests(TestCase):
         response = self.client.get(reverse("payment_settings"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Payments")
+        self.assertContains(response, "Live-mode readiness")

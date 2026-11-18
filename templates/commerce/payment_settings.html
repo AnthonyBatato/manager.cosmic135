@@ -15,6 +15,11 @@
     <div><span class="status {% if webhook_configured %}live{% endif %}">{% if webhook_configured %}{% trans "Configured" %}{% else %}{% trans "Missing" %}{% endif %}</span><h2>{% trans "Payment webhook" %}</h2></div>
     <p>{% trans "Stripe sends successful payment events to:" %}</p><code>{{ webhook_url }}</code>
   </section>
+  <section class="panel integration-card">
+    <div><span class="status {% if live_ready %}live{% endif %}">{% if live_ready %}{% trans "Ready" %}{% else %}{% trans "Not ready" %}{% endif %}</span><h2>{% trans "Live-mode readiness" %}</h2></div>
+    <p>{% blocktrans %}Live key: {{ live_secret_configured }} · Live webhook: {{ live_webhook_configured }} · Active offers missing a live price: {{ missing_live_prices }}{% endblocktrans %}</p>
+    <small>{% trans "The application remains in the mode shown above until STRIPE_MODE is deliberately changed on the server." %}</small>
+  </section>
 </div>
 <section class="panel offers-panel">
   <div class="panel-heading"><div><h2>{% trans "Offers" %}</h2><p class="muted">{% trans "Offers control the price, next step, and email sent after payment." %}</p></div></div>

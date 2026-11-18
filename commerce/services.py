@@ -27,6 +27,11 @@ def process_checkout_event(event_record):
     session_id = obj.get("id")
     if event_type in {"checkout.session.completed", "checkout.session.async_payment_succeeded"}:
         attempt = CheckoutAttempt.objects.select_for_update().select_related("offer").get(stripe_session_id=session_id)
+        event_mode = "live" if event_record.livemode else "test"
+        if attempt.stripe_mode != event_mode:
+            raise ValueError(
+                f"Stripe event mode {event_mode!r} does not match checkout attempt mode {attempt.stripe_mode!r}."
+            )
         if event_type == "checkout.session.completed" and obj.get("payment_status") not in {None, "paid", "no_payment_required"}:
             event_record.processed_at = timezone.now()
             event_record.error = ""

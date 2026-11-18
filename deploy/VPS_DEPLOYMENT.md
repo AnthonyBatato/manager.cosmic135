@@ -151,6 +151,43 @@ For production later, add `STRIPE_LIVE_SECRET_KEY`,
 `STRIPE_LIVE_WEBHOOK_SECRET`, and the offer's live Price ID, then change only
 `STRIPE_MODE=live`. Keep the test and live values in place for safe switching.
 
+### Safe Stripe live cutover
+
+Keep the application in test mode while preparing Live Stripe. In the Stripe
+live dashboard, create the Single and Duo products/prices and a webhook for:
+
+```text
+https://manager.cosmic135.com/payments/webhook/stripe/
+```
+
+Subscribe it to `checkout.session.completed`,
+`checkout.session.async_payment_succeeded`,
+`checkout.session.async_payment_failed`, `checkout.session.expired`,
+`charge.refunded`, and `payment_intent.canceled`.
+
+After pulling the deployment scripts on the VPS, stage the values interactively
+so secrets do not enter shell history:
+
+```bash
+cd /root/cosmic135-manager/manager.cosmic135
+bash deploy/stage_stripe_live.sh
+```
+
+This stores the live key and signing secret in `.env`, assigns the live Price
+IDs to offer 2 (Single) and offer 3 (Duo), verifies them against the expected
+Stripe account, and deliberately leaves `STRIPE_MODE` unchanged.
+
+Only at the scheduled cutover, run:
+
+```bash
+bash deploy/activate_stripe_live.sh
+```
+
+The activation script refuses to switch until credentials, webhook events, and
+all active offer Price IDs pass the live API readiness check. Keep the test
+values in `.env` so rollback requires only changing `STRIPE_MODE=test` and
+recreating `web`, `worker`, and `beat`.
+
 ## One-time automatic custom-domain provisioning
 
 Install the host provisioner once after the manager containers and central

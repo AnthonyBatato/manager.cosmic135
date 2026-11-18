@@ -109,11 +109,30 @@ def _custom_success_response(request, attempt, journey, payment, page):
 
 @owner_required
 def payment_settings(request):
+    offers = Offer.objects.order_by("name")
+    published_offer_ids = ActionMapping.objects.filter(
+        enabled=True,
+        action_type=ActionMapping.ACTION_CHECKOUT,
+        page__is_published=True,
+        target_id__isnull=False,
+    ).values_list("target_id", flat=True)
+    published_offers = offers.filter(active=True, pk__in=published_offer_ids)
+    missing_live_prices = published_offers.filter(stripe_live_price_id="").count()
+    published_offer_count = published_offers.count()
     return render(request, "commerce/payment_settings.html", {
-        "offers": Offer.objects.order_by("name"),
+        "offers": offers,
         "stripe_mode": settings.STRIPE_MODE,
         "secret_configured": bool(settings.STRIPE_SECRET_KEY),
         "webhook_configured": bool(settings.STRIPE_WEBHOOK_SECRET),
+        "live_secret_configured": bool(settings.STRIPE_LIVE_SECRET_KEY),
+        "live_webhook_configured": bool(settings.STRIPE_LIVE_WEBHOOK_SECRET),
+        "missing_live_prices": missing_live_prices,
+        "live_ready": bool(
+            settings.STRIPE_LIVE_SECRET_KEY
+            and settings.STRIPE_LIVE_WEBHOOK_SECRET
+            and published_offer_count
+            and not missing_live_prices
+        ),
         "webhook_url": request.build_absolute_uri(reverse("stripe_webhook")),
     })
 
