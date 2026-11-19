@@ -307,6 +307,7 @@ class StripeCheckoutFlowTests(TestCase):
         self.assertEqual(kwargs["line_items"], [{"price": "price_test_course", "quantity": 1}])
         self.assertEqual(kwargs["name_collection"], {"individual": {"enabled": True, "optional": False}})
         self.assertEqual(kwargs["phone_number_collection"], {"enabled": True})
+        self.assertEqual(kwargs["consent_collection"], {"terms_of_service": "required"})
         self.assertEqual(kwargs["success_url"], "https://go.example.com/payments/success/?session_id={CHECKOUT_SESSION_ID}")
         attempt = CheckoutAttempt.objects.get(stripe_session_id="cs_test_created")
         self.assertEqual(attempt.stripe_mode, "test")

@@ -180,6 +180,7 @@ def checkout_start(request, action_id):
         customer_creation="always",
         name_collection={"individual": {"enabled": True, "optional": False}},
         phone_number_collection={"enabled": True},
+        consent_collection={"terms_of_service": "required"},
         locale="auto",
         client_reference_id=str(attempt.pk),
         metadata={
