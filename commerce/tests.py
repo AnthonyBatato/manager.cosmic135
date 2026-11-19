@@ -12,7 +12,7 @@ from automations.models import EmailDelivery, EmailTemplate, ReminderStep
 from automations.services import schedule_journey_emails
 from automations.tasks import render_bilingual, send_delivery
 from integrations.models import RegistrationSeat
-from pages.models import ActionMapping, AdTrackingSettings, LandingPage, PageVersion
+from pages.models import ActionMapping, AdTrackingSettings, Domain, DomainRoute, LandingPage, PageVersion
 from users.models import ApprovedEmail
 from .models import AdConversionDelivery, CheckoutAttempt, Customer, Journey, Offer, Payment, StripeEvent
 from .services import process_checkout_event
@@ -309,8 +309,32 @@ class StripeCheckoutFlowTests(TestCase):
         self.assertEqual(kwargs["phone_number_collection"], {"enabled": True})
         self.assertEqual(kwargs["consent_collection"], {"terms_of_service": "required"})
         self.assertEqual(kwargs["success_url"], "https://go.example.com/payments/success/?session_id={CHECKOUT_SESSION_ID}")
+        self.assertEqual(kwargs["cancel_url"], "https://sales-page.go.example.com/?checkout=cancelled")
         attempt = CheckoutAttempt.objects.get(stripe_session_id="cs_test_created")
         self.assertEqual(attempt.stripe_mode, "test")
+
+    @override_settings(
+        STRIPE_MODE="test", STRIPE_SECRET_KEY="sk_test_private",
+        STRIPE_PUBLIC_BASE_URL="https://go.example.com", PUBLIC_ROOT_HOST="go.example.com",
+    )
+    @patch("commerce.views.stripe.checkout.Session.create")
+    def test_checkout_cancel_returns_to_verified_custom_domain_route(self, create_session):
+        create_session.return_value = SimpleNamespace(id="cs_test_custom", url="https://checkout.stripe.test/session")
+        domain = Domain.objects.create(
+            hostname="workshop.example.com", page=self.page, status=Domain.STATUS_VERIFIED,
+        )
+        DomainRoute.objects.create(domain=domain, page=self.page, path="tw")
+
+        response = self.client.get(
+            reverse("checkout_start", args=[self.action.pk]),
+            HTTP_HOST="workshop.example.com",
+        )
+
+        self.assertRedirects(response, "https://checkout.stripe.test/session", fetch_redirect_response=False)
+        self.assertEqual(
+            create_session.call_args.kwargs["cancel_url"],
+            "https://workshop.example.com/tw/?checkout=cancelled",
+        )
 
     def test_status_becomes_paid_only_after_webhook_created_journey(self):
         attempt = CheckoutAttempt.objects.create(

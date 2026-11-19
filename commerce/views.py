@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
-from pages.models import ActionMapping
+from pages.models import ActionMapping, Domain, DomainRoute
 from pages.services import render_builder, serve_file_path
 from pages.tracking import purchase_tracking_markup
 from users.auth import owner_required
@@ -157,6 +157,23 @@ def offer_edit(request, pk):
         return redirect("offer_edit", pk=offer.pk)
     return render(request, "commerce/offer_form.html", {"form": form, "offer": offer})
 
+
+def _checkout_cancel_url(request, page):
+    """Return customers to the branded page route that started checkout."""
+    host = getattr(request, "site_host", "")
+    if host:
+        domain = Domain.objects.filter(
+            hostname=host,
+            status=Domain.STATUS_VERIFIED,
+        ).first()
+        if domain:
+            route = DomainRoute.objects.filter(domain=domain, page=page).order_by("path").first()
+            if route:
+                return f"https://{host}/{route.path}/?checkout=cancelled"
+            if domain.page_id == page.pk:
+                return f"https://{host}/?checkout=cancelled"
+    return f"https://{page.slug}.{settings.PUBLIC_ROOT_HOST}/?checkout=cancelled"
+
 def checkout_start(request, action_id):
     action = get_object_or_404(ActionMapping.objects.select_related("page"), pk=action_id, action_type=ActionMapping.ACTION_CHECKOUT, enabled=True)
     offer = get_object_or_404(Offer, pk=action.target_id, active=True)
@@ -193,7 +210,7 @@ def checkout_start(request, action_id):
         },
         payment_intent_data={"metadata": {"attempt_id": str(attempt.pk), "offer_id": str(offer.pk)}},
         success_url=f"{root}{reverse('checkout_success')}?session_id={{CHECKOUT_SESSION_ID}}",
-        cancel_url=f"https://{action.page.slug}.{settings.PUBLIC_ROOT_HOST}/?checkout=cancelled",
+        cancel_url=_checkout_cancel_url(request, action.page),
     )
     attempt.stripe_session_id = session.id
     attempt.save(update_fields=["stripe_session_id", "updated_at"])
