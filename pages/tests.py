@@ -87,6 +87,19 @@ class PageWorkflowTests(TestCase):
         with self.assertRaises(ValidationError):
             validate_archive(upload)
 
+    def test_archive_accepts_valid_mp4_asset(self):
+        upload = zip_upload({
+            "index.html": '<video><source src="promo.mp4" type="video/mp4"></video>',
+            "promo.mp4": b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42",
+        })
+        _, members, _ = validate_archive(upload)
+        self.assertIn("promo.mp4", [member.filename for member in members])
+
+    def test_archive_rejects_renamed_non_mp4_asset(self):
+        upload = zip_upload({"index.html": "ok", "promo.mp4": b"not really a video"})
+        with self.assertRaisesMessage(ValidationError, "Invalid MP4 video"):
+            validate_archive(upload)
+
     @override_settings(PUBLISHED_ROOT=Path(tempfile.gettempdir()) / "cosmic-launch-tests")
     def test_archive_creates_immutable_version(self):
         page = LandingPage.objects.create(name="AI Page", slug="ai-page", created_by=self.user)

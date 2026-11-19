@@ -18,7 +18,7 @@ MAX_EXPANDED_BYTES = 100 * 1024 * 1024
 MAX_FILE_BYTES = 10 * 1024 * 1024
 MAX_FILES = 500
 DENIED_SUFFIXES = {".py", ".php", ".rb", ".pl", ".sh", ".bash", ".ps1", ".bat", ".cmd", ".exe", ".dll", ".so", ".jar", ".zip", ".tar", ".gz", ".7z"}
-ALLOWED_SUFFIXES = {".html", ".htm", ".css", ".js", ".json", ".txt", ".xml", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2", ".ttf", ".otf", ".pdf"}
+ALLOWED_SUFFIXES = {".html", ".htm", ".css", ".js", ".json", ".txt", ".xml", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2", ".ttf", ".otf", ".pdf", ".mp4"}
 ACTION_RE = re.compile(r'data-lpm-action=["\'](?P<kind>checkout|booking|form|external-checkout)(?::(?P<key>[a-z0-9-]+))?["\']', re.I)
 
 def _detect_actions(source):
@@ -76,6 +76,13 @@ def validate_archive(upload):
             raise ValidationError(f"Unsupported file type: {suffix or member.filename}")
         if member.file_size > MAX_FILE_BYTES:
             raise ValidationError(f"File is too large: {member.filename}")
+        if suffix == ".mp4":
+            # ISO Base Media files identify themselves with an `ftyp` box near
+            # the beginning. Reject renamed arbitrary files before extraction.
+            with archive.open(member) as media:
+                header = media.read(12)
+            if len(header) < 12 or header[4:8] != b"ftyp":
+                raise ValidationError(f"Invalid MP4 video: {member.filename}")
         if path.name.lower() == "index.html":
             indexes.append(path)
     if len(indexes) != 1 or len(indexes[0].parts) != 1:
