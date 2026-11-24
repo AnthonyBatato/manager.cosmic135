@@ -183,12 +183,12 @@ def checkout_start(request, action_id):
     if offer.sales_start_at and now < offer.sales_start_at:
         return render(request, "commerce/offer_unavailable.html", {
             "title": "優惠尚未開始 · Offer not started",
-            "detail": "直播限定優惠將於 2026年11月26日晚上8時開放。 This livestream offer opens at 8:00 PM on 26 November 2026.",
+            "detail": "直播限定優惠將於 2026年11月26日晚上8時30分開放。 This livestream offer opens at 8:30 PM on 26 November 2026.",
         }, status=409)
     if offer.sales_end_at and now >= offer.sales_end_at:
         return render(request, "commerce/offer_unavailable.html", {
             "title": "優惠已結束 · Offer ended",
-            "detail": "直播限定優惠已於晚上10時結束。 The livestream promotion ended at 10:00 PM.",
+            "detail": "此限定優惠目前已結束。 This limited promotion is no longer available.",
         }, status=410)
     if not settings.STRIPE_SECRET_KEY:
         return render(request, "commerce/integration_required.html", {"service": "Stripe", "detail": f"Add the Stripe {settings.STRIPE_MODE} secret key and webhook secret to enable checkout."}, status=503)

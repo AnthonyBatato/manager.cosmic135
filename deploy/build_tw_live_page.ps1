@@ -62,7 +62,7 @@ $promoMarkup = @'
         <h2 id="livePromoTitle">直播限定<span>首 5 組・買一送一</span></h2>
         <p class="live-lead">直播當晚完成付款的前 5 組，支付一位的優惠價，即可獲得兩個 12月19日 台北特別場名額。兩位參加者將分別收到自己的入場券登記連結。</p>
         <div class="live-window" aria-label="Promotion period">
-          <span>11月26日</span><span>晚上 8:00 開放</span><span>晚上 10:00 結束</span>
+          <span>11月26日</span><span>晚上 8:30 開放</span><span>限首 5 組・售完即止</span>
         </div>
       </div>
       <div class="live-deal">
@@ -72,7 +72,7 @@ $promoMarkup = @'
         <div class="live-price"><small>NT$</small><strong>3,980</strong></div>
         <p class="live-for-two">兩個完整參加名額</p>
         <a data-lpm-action="checkout:tw-live-bogo" href="#" class="btn btn-gold">搶先完成付款</a>
-        <p class="live-rule">名額以 Stripe 完成付款時間為準；點擊或進入結帳不保留名額。售完或晚上10時後即停止。</p>
+        <p class="live-rule">名額以 Stripe 完成付款時間為準；點擊或進入結帳不保留名額。首 5 組付款成功後即停止。</p>
       </div>
     </div>
   </div>

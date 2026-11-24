@@ -1,4 +1,3 @@
-import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -6,7 +5,6 @@ import stripe
 from django.conf import settings
 from django.core.files import File
 from django.urls import reverse
-from django_celery_beat.models import ClockedSchedule, PeriodicTask
 
 from commerce.models import Offer
 from pages.models import ActionMapping, Domain, DomainRoute, LandingPage
@@ -15,8 +13,7 @@ from pages.services import save_uploaded_version
 
 PROMO_KEY = "tw-live-bogo-2026"
 PAGE_ZIP = "/tmp/workshop-tw-live-upload.zip"
-STARTS_AT = datetime(2026, 11, 26, 20, 0, tzinfo=ZoneInfo("Asia/Taipei"))
-ENDS_AT = datetime(2026, 11, 26, 22, 0, tzinfo=ZoneInfo("Asia/Taipei"))
+STARTS_AT = datetime(2026, 11, 26, 20, 30, tzinfo=ZoneInfo("Asia/Taipei"))
 
 
 def find_product(api_key):
@@ -112,7 +109,7 @@ for field in (
     setattr(offer, field, getattr(single_offer, field))
 offer.registration_quantity = 2
 offer.sales_start_at = STARTS_AT
-offer.sales_end_at = ENDS_AT
+offer.sales_end_at = None
 offer.max_completed_orders = 5
 offer.active = True
 offer.save()
@@ -161,18 +158,6 @@ page.save(update_fields=["published_version", "is_published", "updated_at"])
 
 domain = Domain.objects.get(hostname="workshop.cosmic135.com", status=Domain.STATUS_VERIFIED)
 DomainRoute.objects.update_or_create(domain=domain, path="tw-live", defaults={"page": page})
-
-clocked, _ = ClockedSchedule.objects.get_or_create(clocked_time=ENDS_AT)
-PeriodicTask.objects.update_or_create(
-    name="Close TW livestream promo payment links",
-    defaults={
-        "task": "commerce.tasks.deactivate_offer_payment_links",
-        "clocked": clocked,
-        "one_off": True,
-        "enabled": True,
-        "args": json.dumps([offer.pk]),
-    },
-)
 
 print(f"Page {page.pk} published at /tw-live/ with offer {offer.pk}.")
 print(f"Test Payment Link: {offer.stripe_test_payment_link_id}")
