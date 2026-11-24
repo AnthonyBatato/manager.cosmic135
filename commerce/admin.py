@@ -4,7 +4,7 @@ from .models import AdConversionDelivery, Offer, Customer, CheckoutAttempt, Paym
 
 @admin.register(Offer)
 class OfferAdmin(admin.ModelAdmin):
-    list_display = ("name", "currency", "thank_you_page", "cosmic_tools_course_id", "registration_quantity", "post_payment_email", "active")
+    list_display = ("name", "currency", "max_completed_orders", "sales_start_at", "sales_end_at", "registration_quantity", "active")
     list_filter = ("post_payment_email", "active")
     search_fields = ("name", "stripe_test_price_id", "stripe_live_price_id")
 

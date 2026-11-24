@@ -3,7 +3,8 @@ import json
 from urllib import error, parse, request
 from django.conf import settings
 from django.utils import timezone
-from .models import AdConversionDelivery, StripeEvent
+import stripe
+from .models import AdConversionDelivery, Offer, StripeEvent
 from .services import process_checkout_event
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=6)
@@ -80,4 +81,15 @@ def dispatch_pending_ad_conversions():
     for delivery_pk in pending:
         send_ad_conversion.delay(delivery_pk)
     return len(pending)
+
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=6)
+def deactivate_offer_payment_links(self, offer_pk):
+    offer = Offer.objects.get(pk=offer_pk)
+    links = [
+        (offer.stripe_test_payment_link_id, settings.STRIPE_TEST_SECRET_KEY),
+        (offer.stripe_live_payment_link_id, settings.STRIPE_LIVE_SECRET_KEY),
+    ]
+    for link_id, secret_key in links:
+        if link_id and secret_key:
+            stripe.PaymentLink.modify(link_id, active=False, api_key=secret_key)
 

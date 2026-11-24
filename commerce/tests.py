@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import timedelta
 import tempfile
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -61,6 +62,30 @@ class StripeEventTests(TestCase):
 
         self.assertFalse(Payment.objects.exists())
         self.assertFalse(Journey.objects.exists())
+
+    @patch("automations.services.schedule_journey_emails")
+    def test_payment_link_session_binds_attempt_from_client_reference(self, schedule):
+        page = LandingPage.objects.create(name="Promo", slug="promo")
+        offer = Offer.objects.create(name="Promo", destination_url="https://tools.example/register/")
+        action = ActionMapping.objects.create(
+            page=page, key="promo", label="Buy", action_type="checkout", target_id=offer.pk,
+        )
+        attempt = CheckoutAttempt.objects.create(page=page, action=action, offer=offer, stripe_mode="test")
+        event = StripeEvent.objects.create(
+            event_id="evt_payment_link", event_type="checkout.session.completed",
+            payload={"data": {"object": {
+                "id": "cs_payment_link", "client_reference_id": str(attempt.pk),
+                "payment_intent": "pi_payment_link", "amount_total": 398000, "currency": "twd",
+                "customer_details": {"email": "promo@example.com"},
+            }}},
+        )
+
+        process_checkout_event(event)
+
+        attempt.refresh_from_db()
+        self.assertEqual(attempt.stripe_session_id, "cs_payment_link")
+        self.assertEqual(attempt.status, CheckoutAttempt.STATUS_PAID)
+        self.assertEqual(attempt.payment.amount_total, 398000)
 
     @patch("automations.services.schedule_journey_emails")
     def test_refund_before_checkout_completion_is_reconciled(self, schedule):
@@ -312,6 +337,63 @@ class StripeCheckoutFlowTests(TestCase):
         self.assertEqual(kwargs["cancel_url"], "https://sales-page.go.example.com/?checkout=cancelled")
         attempt = CheckoutAttempt.objects.get(stripe_session_id="cs_test_created")
         self.assertEqual(attempt.stripe_mode, "test")
+
+    @override_settings(STRIPE_MODE="test", STRIPE_SECRET_KEY="sk_test_private")
+    @patch("commerce.views.stripe.checkout.Session.create")
+    def test_limited_payment_link_has_no_hold_and_uses_attempt_reference(self, create_session):
+        self.offer.stripe_test_payment_link_id = "plink_test_promo"
+        self.offer.stripe_test_payment_link_url = "https://buy.stripe.test/promo"
+        self.offer.max_completed_orders = 5
+        self.offer.save(update_fields=[
+            "stripe_test_payment_link_id", "stripe_test_payment_link_url", "max_completed_orders",
+        ])
+
+        response = self.client.get(reverse("checkout_start", args=[self.action.pk]))
+
+        attempt = CheckoutAttempt.objects.get()
+        self.assertRedirects(
+            response,
+            f"https://buy.stripe.test/promo?client_reference_id={attempt.pk}",
+            fetch_redirect_response=False,
+        )
+        self.assertIsNone(attempt.stripe_session_id)
+        create_session.assert_not_called()
+
+    @override_settings(STRIPE_MODE="test", STRIPE_SECRET_KEY="sk_test_private")
+    def test_limited_offer_stops_after_five_verified_payments(self):
+        self.offer.stripe_test_payment_link_id = "plink_test_promo"
+        self.offer.stripe_test_payment_link_url = "https://buy.stripe.test/promo"
+        self.offer.max_completed_orders = 5
+        self.offer.save(update_fields=[
+            "stripe_test_payment_link_id", "stripe_test_payment_link_url", "max_completed_orders",
+        ])
+        for number in range(5):
+            CheckoutAttempt.objects.create(
+                page=self.page, action=self.action, offer=self.offer,
+                stripe_session_id=f"cs_paid_{number}", status=CheckoutAttempt.STATUS_PAID,
+            )
+
+        response = self.client.get(reverse("checkout_start", args=[self.action.pk]))
+
+        self.assertEqual(response.status_code, 410)
+        self.assertContains(response, "Sold out", status_code=410)
+        self.assertEqual(CheckoutAttempt.objects.count(), 5)
+
+    @override_settings(STRIPE_MODE="test", STRIPE_SECRET_KEY="sk_test_private")
+    def test_limited_offer_enforces_sales_window(self):
+        self.offer.stripe_test_payment_link_id = "plink_test_promo"
+        self.offer.stripe_test_payment_link_url = "https://buy.stripe.test/promo"
+        self.offer.max_completed_orders = 5
+        self.offer.sales_start_at = timezone.now() + timedelta(hours=1)
+        self.offer.save(update_fields=[
+            "stripe_test_payment_link_id", "stripe_test_payment_link_url", "max_completed_orders", "sales_start_at",
+        ])
+
+        response = self.client.get(reverse("checkout_start", args=[self.action.pk]))
+
+        self.assertEqual(response.status_code, 409)
+        self.assertContains(response, "Offer not started", status_code=409)
+        self.assertFalse(CheckoutAttempt.objects.exists())
 
     @override_settings(
         STRIPE_MODE="test", STRIPE_SECRET_KEY="sk_test_private",

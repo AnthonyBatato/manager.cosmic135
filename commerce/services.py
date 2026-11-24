@@ -6,6 +6,35 @@ def _event_payment_intent(event):
     obj = event.payload.get("data", {}).get("object", {})
     return obj.get("payment_intent") or (obj.get("id") if event.event_type == "payment_intent.canceled" else "")
 
+def _checkout_attempt_for_session(obj, event_record):
+    session_id = obj.get("id")
+    attempt = CheckoutAttempt.objects.select_for_update().select_related("offer").filter(
+        stripe_session_id=session_id,
+    ).first()
+    if attempt:
+        return attempt
+    reference = str(obj.get("client_reference_id") or "")
+    if reference.isdigit():
+        attempt = CheckoutAttempt.objects.select_for_update().select_related("offer").filter(pk=int(reference)).first()
+        if attempt and not attempt.stripe_session_id:
+            attempt.stripe_session_id = session_id
+            attempt.save(update_fields=["stripe_session_id", "updated_at"])
+            return attempt
+    metadata = obj.get("metadata") or {}
+    offer_id = str(metadata.get("offer_id") or "")
+    page_id = str(metadata.get("page_id") or "")
+    action_id = str(metadata.get("action_id") or "")
+    if offer_id.isdigit() and page_id.isdigit() and action_id.isdigit():
+        return CheckoutAttempt.objects.create(
+            page_id=int(page_id),
+            page_version_id=int(metadata["page_version_id"]) if str(metadata.get("page_version_id") or "").isdigit() else None,
+            action_id=int(action_id),
+            offer_id=int(offer_id),
+            stripe_session_id=session_id,
+            stripe_mode="live" if event_record.livemode else "test",
+        )
+    raise CheckoutAttempt.DoesNotExist(f"No checkout attempt matches Stripe session {session_id}.")
+
 def _mark_refunded(payment):
     payment.status = "refunded"
     payment.save(update_fields=["status"])
@@ -26,7 +55,7 @@ def process_checkout_event(event_record):
     event_type = event_record.event_type
     session_id = obj.get("id")
     if event_type in {"checkout.session.completed", "checkout.session.async_payment_succeeded"}:
-        attempt = CheckoutAttempt.objects.select_for_update().select_related("offer").get(stripe_session_id=session_id)
+        attempt = _checkout_attempt_for_session(obj, event_record)
         event_mode = "live" if event_record.livemode else "test"
         if attempt.stripe_mode != event_mode:
             raise ValueError(

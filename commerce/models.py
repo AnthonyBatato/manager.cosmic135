@@ -18,6 +18,10 @@ class Offer(models.Model):
     stripe_price_id = models.CharField(max_length=120, blank=True)
     stripe_test_price_id = models.CharField(max_length=120, blank=True)
     stripe_live_price_id = models.CharField(max_length=120, blank=True)
+    stripe_test_payment_link_id = models.CharField(max_length=120, blank=True)
+    stripe_test_payment_link_url = models.URLField(blank=True)
+    stripe_live_payment_link_id = models.CharField(max_length=120, blank=True)
+    stripe_live_payment_link_url = models.URLField(blank=True)
     external_checkout_url = models.URLField(blank=True)
     thank_you_page = models.ForeignKey(
         "pages.LandingPage",
@@ -40,6 +44,13 @@ class Offer(models.Model):
         default=1,
         help_text="Number of separate participant registration links created after payment.",
     )
+    sales_start_at = models.DateTimeField(null=True, blank=True)
+    sales_end_at = models.DateTimeField(null=True, blank=True)
+    max_completed_orders = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Hard completed-payment limit. Limited offers use a Stripe Payment Link with the same limit.",
+    )
     post_payment_email = models.CharField(max_length=20, choices=EMAIL_CHOICES, default=EMAIL_REGISTRATION)
     email_subject_zh = models.CharField(max_length=250, blank=True)
     email_subject_en = models.CharField(max_length=250, blank=True)
@@ -50,6 +61,10 @@ class Offer(models.Model):
         if mode == "live":
             return self.stripe_live_price_id or self.stripe_price_id
         return self.stripe_test_price_id or self.stripe_price_id
+    def stripe_payment_link_for_mode(self, mode):
+        if mode == "live":
+            return self.stripe_live_payment_link_url
+        return self.stripe_test_payment_link_url
     def __str__(self): return self.name
 
 class Customer(models.Model):

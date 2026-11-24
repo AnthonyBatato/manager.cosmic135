@@ -1,6 +1,7 @@
 import html
 import mimetypes
 import re
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import stripe
 from django.conf import settings
@@ -8,6 +9,7 @@ from django.contrib import messages
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from pages.models import ActionMapping, Domain, DomainRoute
@@ -177,18 +179,43 @@ def _checkout_cancel_url(request, page):
 def checkout_start(request, action_id):
     action = get_object_or_404(ActionMapping.objects.select_related("page"), pk=action_id, action_type=ActionMapping.ACTION_CHECKOUT, enabled=True)
     offer = get_object_or_404(Offer, pk=action.target_id, active=True)
+    now = timezone.now()
+    if offer.sales_start_at and now < offer.sales_start_at:
+        return render(request, "commerce/offer_unavailable.html", {
+            "title": "優惠尚未開始 · Offer not started",
+            "detail": "直播限定優惠將於 2026年11月26日晚上8時開放。 This livestream offer opens at 8:00 PM on 26 November 2026.",
+        }, status=409)
+    if offer.sales_end_at and now >= offer.sales_end_at:
+        return render(request, "commerce/offer_unavailable.html", {
+            "title": "優惠已結束 · Offer ended",
+            "detail": "直播限定優惠已於晚上10時結束。 The livestream promotion ended at 10:00 PM.",
+        }, status=410)
     if not settings.STRIPE_SECRET_KEY:
         return render(request, "commerce/integration_required.html", {"service": "Stripe", "detail": f"Add the Stripe {settings.STRIPE_MODE} secret key and webhook secret to enable checkout."}, status=503)
     price_id = offer.stripe_price_for_mode(settings.STRIPE_MODE)
     if not price_id:
         return render(request, "commerce/integration_required.html", {"service": "Stripe", "detail": f"This offer has no Stripe {settings.STRIPE_MODE} Price ID."}, status=503)
     attribution_matches_page = request.session.get("openai_attribution_page_id") == action.page_id
+    if offer.max_completed_orders and CheckoutAttempt.objects.filter(
+        offer=offer, status=CheckoutAttempt.STATUS_PAID,
+    ).count() >= offer.max_completed_orders:
+        return render(request, "commerce/offer_unavailable.html", {
+            "title": "優惠已售罄 · Sold out",
+            "detail": "首5名買一送一名額已全部售出。 All five Buy 1 Free 1 packages have been sold.",
+        }, status=410)
     attempt = CheckoutAttempt.objects.create(
         page=action.page, page_version=action.page.published_version, action=action, offer=offer,
         stripe_mode=settings.STRIPE_MODE,
         openai_oppref=request.session.get("openai_oppref", "")[:2048] if attribution_matches_page else "",
         openai_obref=request.session.get("openai_obref", "")[:2048] if attribution_matches_page else "",
     )
+    payment_link_url = offer.stripe_payment_link_for_mode(settings.STRIPE_MODE)
+    if payment_link_url:
+        parts = urlsplit(payment_link_url)
+        query = dict(parse_qsl(parts.query, keep_blank_values=True))
+        query["client_reference_id"] = str(attempt.pk)
+        destination = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+        return redirect(destination)
     stripe.api_key = settings.STRIPE_SECRET_KEY
     root = settings.STRIPE_PUBLIC_BASE_URL
     session = stripe.checkout.Session.create(

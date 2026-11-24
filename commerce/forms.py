@@ -9,9 +9,12 @@ class OfferForm(forms.ModelForm):
         model = Offer
         fields = [
             "name", "currency", "stripe_test_price_id", "stripe_live_price_id",
+            "stripe_test_payment_link_id", "stripe_test_payment_link_url",
+            "stripe_live_payment_link_id", "stripe_live_payment_link_url",
             "thank_you_page",
             "destination_type", "destination_id", "cosmic_tools_course_id", "destination_url",
             "registration_quantity", "post_payment_email",
+            "sales_start_at", "sales_end_at", "max_completed_orders",
             "email_subject_zh", "email_body_zh", "email_subject_en", "email_body_en",
             "active",
         ]
@@ -21,6 +24,9 @@ class OfferForm(forms.ModelForm):
             "destination_id": "Booking type ID",
             "cosmic_tools_course_id": "Cosmic Tools course / form ID",
             "registration_quantity": "Participant registration links",
+            "sales_start_at": "Sales start",
+            "sales_end_at": "Sales end",
+            "max_completed_orders": "Maximum completed orders",
             "thank_you_page": "Thank-you design page",
             "destination_url": "Registration form URL",
             "post_payment_email": "Email after payment",
@@ -34,6 +40,7 @@ class OfferForm(forms.ModelForm):
             "stripe_live_price_id": "Starts with price_. Add this only when the live product is ready.",
             "cosmic_tools_course_id": "Recommended for Cosmic Tools. A unique customer registration link is generated after Stripe confirms payment.",
             "registration_quantity": "Use 1 for a single ticket and 2 for a duo ticket.",
+            "max_completed_orders": "For first-come-first-served offers, Stripe must use a limited Payment Link with this same completed-session limit.",
             "thank_you_page": "Create or upload the design under Landing Pages, then select it here. The verified registration buttons are inserted automatically.",
             "email_body_zh": "Leave blank to use the default template. Supports {{ offer.name }}, {{ action_url }}, and registration_links template loops.",
             "email_body_en": "Leave blank to use the default template. Supports {{ offer.name }}, {{ action_url }}, and registration_links template loops.",
@@ -58,4 +65,12 @@ class OfferForm(forms.ModelForm):
             self.add_error("destination_id", "Enter the booking type ID.")
         if (cleaned.get("registration_quantity") or 0) < 1:
             self.add_error("registration_quantity", "Create at least one participant registration link.")
+        start = cleaned.get("sales_start_at")
+        end = cleaned.get("sales_end_at")
+        if start and end and end <= start:
+            self.add_error("sales_end_at", "Sales end must be later than sales start.")
+        if cleaned.get("max_completed_orders") and not (
+            cleaned.get("stripe_test_payment_link_id") or cleaned.get("stripe_live_payment_link_id")
+        ):
+            self.add_error("max_completed_orders", "Limited offers require a Stripe Payment Link ID.")
         return cleaned
