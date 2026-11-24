@@ -182,13 +182,19 @@ def checkout_start(request, action_id):
     now = timezone.now()
     if offer.sales_start_at and now < offer.sales_start_at:
         return render(request, "commerce/offer_unavailable.html", {
-            "title": "優惠尚未開始 · Offer not started",
-            "detail": "直播限定優惠將於 2026年11月26日晚上8時30分開放。 This livestream offer opens at 8:30 PM on 26 November 2026.",
+            "title": "優惠尚未開始",
+            "title_zh": "優惠尚未開始",
+            "title_en": "Offer not started",
+            "detail_zh": "直播限定優惠將於 2026年11月26日晚上8時30分開放。",
+            "detail_en": "This livestream offer opens at 8:30 PM on 26 November 2026.",
         }, status=409)
     if offer.sales_end_at and now >= offer.sales_end_at:
         return render(request, "commerce/offer_unavailable.html", {
-            "title": "優惠已結束 · Offer ended",
-            "detail": "此限定優惠目前已結束。 This limited promotion is no longer available.",
+            "title": "優惠已結束",
+            "title_zh": "優惠已結束",
+            "title_en": "Offer ended",
+            "detail_zh": "此限定優惠目前已結束。",
+            "detail_en": "This limited promotion is no longer available.",
         }, status=410)
     if not settings.STRIPE_SECRET_KEY:
         return render(request, "commerce/integration_required.html", {"service": "Stripe", "detail": f"Add the Stripe {settings.STRIPE_MODE} secret key and webhook secret to enable checkout."}, status=503)
@@ -200,8 +206,11 @@ def checkout_start(request, action_id):
         offer=offer, status=CheckoutAttempt.STATUS_PAID,
     ).count() >= offer.max_completed_orders:
         return render(request, "commerce/offer_unavailable.html", {
-            "title": "優惠已售罄 · Sold out",
-            "detail": "首5名買一送一名額已全部售出。 All five Buy 1 Free 1 packages have been sold.",
+            "title": "優惠已售罄",
+            "title_zh": "優惠已售罄",
+            "title_en": "Sold out",
+            "detail_zh": "首5組買一送一名額已全部售出。",
+            "detail_en": "All five Buy 1 Free 1 packages have been sold.",
         }, status=410)
     attempt = CheckoutAttempt.objects.create(
         page=action.page, page_version=action.page.published_version, action=action, offer=offer,
