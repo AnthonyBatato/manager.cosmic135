@@ -1,9 +1,44 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="public-message">
-  <div class="empty-orbit">限</div>
-  <h1>{{ title }}</h1>
-  <p>{{ detail }}</p>
-  <a class="button primary" href="https://workshop.cosmic135.com/tw-live/">返回優惠頁 · Return to promotion</a>
-</div>
-{% endblock %}
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#faf8f3">
+  <title>{{ title }} · Cosmic135</title>
+  <style>
+    :root{--ink:#14231d;--muted:#59635f;--cream:#faf8f3;--gold:#a67c2e;--gold-light:#d9ba79;--green:#18392f}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;color:var(--ink);background:radial-gradient(circle at 12% 13%,rgba(217,186,121,.22),transparent 24rem),radial-gradient(circle at 88% 90%,rgba(24,57,47,.12),transparent 27rem),var(--cream);font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif}
+    body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.22;background-image:linear-gradient(rgba(20,35,29,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(20,35,29,.05) 1px,transparent 1px);background-size:44px 44px;mask-image:linear-gradient(to bottom,#000,transparent 78%)}
+    .page{position:relative;z-index:1;width:min(100% - 32px,1040px);min-height:100vh;margin:0 auto;padding:32px 0;display:grid;align-items:center}
+    .panel{overflow:hidden;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(300px,.75fr);background:rgba(255,255,255,.9);border:1px solid rgba(20,35,29,.11);border-radius:30px;box-shadow:0 28px 80px rgba(20,35,29,.13);backdrop-filter:blur(12px)}
+    .content{padding:clamp(34px,6vw,68px)}.brand{display:inline-flex;align-items:center;gap:10px;margin-bottom:54px;color:var(--ink);font-size:15px;font-weight:800;letter-spacing:.08em;text-decoration:none}.brand-mark{display:grid;width:38px;height:38px;place-items:center;border-radius:50%;color:#fff;background:var(--green);font-family:Georgia,serif;font-size:20px}
+    .kicker{margin:0 0 12px;color:var(--gold);font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}h1{max-width:620px;margin:0;font-family:Georgia,"Noto Serif TC",serif;font-size:clamp(38px,6vw,66px);font-weight:600;line-height:1.08;letter-spacing:-.035em}.detail{max-width:590px;margin:24px 0 0;color:var(--muted);font-size:clamp(16px,2vw,18px);line-height:1.8}
+    .actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:34px}.button{display:inline-flex;min-height:52px;align-items:center;justify-content:center;padding:13px 24px;border:1px solid var(--green);border-radius:999px;color:#fff;background:var(--green);font-size:15px;font-weight:800;text-decoration:none;transition:transform .2s ease,box-shadow .2s ease}.button:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(24,57,47,.2)}
+    .side{position:relative;display:flex;flex-direction:column;justify-content:space-between;min-height:570px;padding:clamp(32px,5vw,52px);color:#fff;background:radial-gradient(circle at 80% 20%,rgba(217,186,121,.3),transparent 16rem),linear-gradient(155deg,#214b3e,#102a22 72%)}.side:after{content:"135";position:absolute;right:-18px;bottom:-40px;color:rgba(255,255,255,.035);font-family:Georgia,serif;font-size:190px;line-height:1}.label{position:relative;z-index:1;display:inline-flex;align-self:flex-start;padding:8px 13px;border:1px solid rgba(255,255,255,.24);border-radius:999px;font-size:13px;font-weight:800;letter-spacing:.08em}
+    .offer{position:relative;z-index:1}.offer small{display:block;margin-bottom:8px;color:var(--gold-light);font-size:13px;font-weight:800;letter-spacing:.1em}.offer h2{margin:0;font-family:Georgia,"Noto Serif TC",serif;font-size:clamp(28px,4vw,42px);font-weight:500;line-height:1.2}.date{display:grid;grid-template-columns:auto 1fr;gap:16px;margin-top:28px;padding-top:24px;border-top:1px solid rgba(255,255,255,.18)}.day{color:var(--gold-light);font-family:Georgia,serif;font-size:46px;line-height:.9}.date p{margin:0;font-size:15px;line-height:1.6}.note{position:relative;z-index:1;margin:34px 0 0;color:rgba(255,255,255,.7);font-size:13px;line-height:1.6}
+    @media(max-width:760px){.page{width:min(100% - 20px,600px);padding:10px 0}.panel{grid-template-columns:1fr;border-radius:22px}.content{padding:30px 24px 36px}.brand{margin-bottom:40px}.side{min-height:390px;padding:34px 24px}.side:after{font-size:135px}.actions,.button{width:100%}}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="panel" aria-labelledby="status-title">
+      <div class="content">
+        <a class="brand" href="https://workshop.cosmic135.com/tw-live/"><span class="brand-mark">C</span><span>COSMIC135</span></a>
+        <p class="kicker">Taipei Special Workshop</p>
+        <h1 id="status-title">{{ title }}</h1>
+        <p class="detail">{{ detail }}</p>
+        <div class="actions"><a class="button" href="https://workshop.cosmic135.com/tw-live/">返回直播優惠頁 · Return to promotion</a></div>
+      </div>
+      <aside class="side" aria-label="Promotion details">
+        <span class="label">直播限定 · LIVE ONLY</span>
+        <div class="offer">
+          <small>FIRST 5 COMPLETED PAYMENTS</small>
+          <h2>首 5 組<br>買一送一</h2>
+          <div class="date"><span class="day">26</span><p>2026年11月<br><strong>晚上 8:30 開放</strong><br>售完即止</p></div>
+        </div>
+        <p class="note">名額以成功付款的先後次序為準。進入結帳頁不代表保留名額。<br>Places are confirmed in completed-payment order.</p>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>
