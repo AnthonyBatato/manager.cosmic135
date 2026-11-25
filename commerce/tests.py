@@ -566,6 +566,31 @@ class PostPaymentEmailTests(TestCase):
         self.assertIn("参加者 1：https://tools.example/one/", body)
         self.assertIn("Participant 2: https://tools.example/two/", body)
 
+    def test_offer_specific_reminder_follows_event_email_format(self):
+        template = EmailTemplate.objects.create(
+            name="Default reminder", kind="reminder",
+            subject_en="Default reminder", subject_zh="默认提醒",
+            body_en="Default reminder body", body_zh="默认提醒内容",
+        )
+        offer = Offer.objects.create(
+            name="Taipei Duo",
+            reminder_subject_zh="溫馨提醒｜請完成入場券登記",
+            reminder_subject_en="Friendly reminder | Complete entry ticket registration",
+            reminder_body_zh="尚未完成登記。{% for link in registration_links %}參加者 {{ forloop.counter }}：{{ link.registration_url }}\n{% endfor %}",
+            reminder_body_en="Registration is incomplete. {% for link in registration_links %}Participant {{ forloop.counter }}: {{ link.registration_url }}\n{% endfor %}",
+        )
+        links = [
+            SimpleNamespace(registration_url="https://tools.example/one/"),
+            SimpleNamespace(registration_url="https://tools.example/two/"),
+        ]
+
+        subject, body = render_bilingual(template, Context({"registration_links": links}), offer=offer)
+
+        self.assertIn("溫馨提醒", subject)
+        self.assertIn("參加者 1：https://tools.example/one/", body)
+        self.assertIn("Participant 2: https://tools.example/two/", body)
+        self.assertNotIn("默认提醒内容", body)
+
 
 class PaymentSettingsTests(TestCase):
     def test_owner_can_open_payment_settings(self):

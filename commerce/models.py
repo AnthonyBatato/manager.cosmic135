@@ -56,6 +56,10 @@ class Offer(models.Model):
     email_subject_en = models.CharField(max_length=250, blank=True)
     email_body_zh = models.TextField(blank=True)
     email_body_en = models.TextField(blank=True)
+    reminder_subject_zh = models.CharField(max_length=250, blank=True)
+    reminder_subject_en = models.CharField(max_length=250, blank=True)
+    reminder_body_zh = models.TextField(blank=True)
+    reminder_body_en = models.TextField(blank=True)
     active = models.BooleanField(default=True)
     def stripe_price_for_mode(self, mode):
         if mode == "live":

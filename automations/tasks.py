@@ -11,11 +11,21 @@ from .models import EmailDelivery
 
 def render_bilingual(template, context, offer=None):
     """Render Chinese first and English second for every automated email."""
-    use_offer_override = bool(offer and template.kind == "action_request" and (offer.email_body_zh or offer.email_body_en))
-    subject_zh_source = (offer.email_subject_zh or template.subject_zh) if use_offer_override else template.subject_zh
-    subject_en_source = (offer.email_subject_en or template.subject_en) if use_offer_override else template.subject_en
-    body_zh_source = (offer.email_body_zh or template.body_zh) if use_offer_override else template.body_zh
-    body_en_source = (offer.email_body_en or template.body_en) if use_offer_override else template.body_en
+    if offer and template.kind == "action_request" and (offer.email_body_zh or offer.email_body_en):
+        subject_zh_source = offer.email_subject_zh or template.subject_zh
+        subject_en_source = offer.email_subject_en or template.subject_en
+        body_zh_source = offer.email_body_zh or template.body_zh
+        body_en_source = offer.email_body_en or template.body_en
+    elif offer and template.kind == "reminder" and (offer.reminder_body_zh or offer.reminder_body_en):
+        subject_zh_source = offer.reminder_subject_zh or template.subject_zh
+        subject_en_source = offer.reminder_subject_en or template.subject_en
+        body_zh_source = offer.reminder_body_zh or template.body_zh
+        body_en_source = offer.reminder_body_en or template.body_en
+    else:
+        subject_zh_source = template.subject_zh
+        subject_en_source = template.subject_en
+        body_zh_source = template.body_zh
+        body_en_source = template.body_en
     subject_zh = Template(subject_zh_source).render(context).strip()
     subject_en = Template(subject_en_source).render(context).strip()
     body_zh = Template(body_zh_source).render(context).strip()

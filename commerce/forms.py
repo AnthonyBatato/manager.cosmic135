@@ -16,6 +16,7 @@ class OfferForm(forms.ModelForm):
             "registration_quantity", "post_payment_email",
             "sales_start_at", "sales_end_at", "max_completed_orders",
             "email_subject_zh", "email_body_zh", "email_subject_en", "email_body_en",
+            "reminder_subject_zh", "reminder_body_zh", "reminder_subject_en", "reminder_body_en",
             "active",
         ]
         labels = {
@@ -34,6 +35,10 @@ class OfferForm(forms.ModelForm):
             "email_body_zh": "Chinese email body (optional override)",
             "email_subject_en": "English email subject (optional override)",
             "email_body_en": "English email body (optional override)",
+            "reminder_subject_zh": "Chinese reminder subject (optional override)",
+            "reminder_body_zh": "Chinese reminder body (optional override)",
+            "reminder_subject_en": "English reminder subject (optional override)",
+            "reminder_body_en": "English reminder body (optional override)",
         }
         help_texts = {
             "stripe_test_price_id": "Starts with price_. Use the price from the Stripe sandbox.",
@@ -44,6 +49,8 @@ class OfferForm(forms.ModelForm):
             "thank_you_page": "Create or upload the design under Landing Pages, then select it here. The verified registration buttons are inserted automatically.",
             "email_body_zh": "Leave blank to use the default template. Supports {{ offer.name }}, {{ action_url }}, and registration_links template loops.",
             "email_body_en": "Leave blank to use the default template. Supports {{ offer.name }}, {{ action_url }}, and registration_links template loops.",
+            "reminder_body_zh": "Leave blank to use the default reminder. Supports {{ offer.name }}, {{ action_url }}, and registration_links template loops.",
+            "reminder_body_en": "Leave blank to use the default reminder. Supports {{ offer.name }}, {{ action_url }}, and registration_links template loops.",
             "destination_url": "Fallback: use an existing registration form URL when Cosmic Tools automation is not selected.",
         }
 
