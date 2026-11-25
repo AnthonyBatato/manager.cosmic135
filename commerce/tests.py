@@ -268,6 +268,25 @@ class StripeCheckoutFlowTests(TestCase):
             page=self.page, key="checkout", label="Buy", action_type="checkout", target_id=self.offer.pk,
         )
 
+    def test_owner_can_preview_tw_live_sold_out_state_without_fake_orders(self):
+        owner = get_user_model().objects.create_superuser(
+            username="preview-owner", email="owner@example.com", password="test-password",
+        )
+        self.client.force_login(owner)
+
+        response = self.client.get(reverse("tw_live_sold_out_preview"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "優惠已售罄")
+        self.assertContains(response, "All five Buy 1 Free 1 packages have been sold.")
+        self.assertFalse(CheckoutAttempt.objects.exists())
+
+    def test_tw_live_sold_out_preview_requires_owner_login(self):
+        response = self.client.get(reverse("tw_live_sold_out_preview"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("account_login"), response["Location"])
+
     def test_uploaded_thank_you_design_injects_verified_registration_links(self):
         customer = Customer.objects.create(email="buyer@example.com")
         with tempfile.TemporaryDirectory() as directory:

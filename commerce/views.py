@@ -176,6 +176,18 @@ def _checkout_cancel_url(request, page):
                 return f"https://{host}/?checkout=cancelled"
     return f"https://{page.slug}.{settings.PUBLIC_ROOT_HOST}/?checkout=cancelled"
 
+
+@owner_required
+def tw_live_sold_out_preview(request):
+    """Owner-only simulation of the exact state shown after five paid promo orders."""
+    return render(request, "commerce/offer_unavailable.html", {
+        "title": "優惠已售罄",
+        "title_zh": "優惠已售罄",
+        "title_en": "Sold out",
+        "detail_zh": "首5組買一送一名額已全部售出。",
+        "detail_en": "All five Buy 1 Free 1 packages have been sold.",
+    })
+
 def checkout_start(request, action_id):
     action = get_object_or_404(ActionMapping.objects.select_related("page"), pk=action_id, action_type=ActionMapping.ACTION_CHECKOUT, enabled=True)
     offer = get_object_or_404(Offer, pk=action.target_id, active=True)
