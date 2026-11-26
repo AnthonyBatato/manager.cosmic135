@@ -239,6 +239,9 @@ def checkout_start(request, action_id):
         return redirect(destination)
     stripe.api_key = settings.STRIPE_SECRET_KEY
     root = settings.STRIPE_PUBLIC_BASE_URL
+    payment_intent_data = {"metadata": {"attempt_id": str(attempt.pk), "offer_id": str(offer.pk)}}
+    if offer.stripe_payment_description:
+        payment_intent_data["description"] = offer.stripe_payment_description
     session = stripe.checkout.Session.create(
         mode="payment",
         line_items=[{"price": price_id, "quantity": 1}],
@@ -256,7 +259,7 @@ def checkout_start(request, action_id):
             "offer_id": str(offer.pk),
             "stripe_mode": settings.STRIPE_MODE,
         },
-        payment_intent_data={"metadata": {"attempt_id": str(attempt.pk), "offer_id": str(offer.pk)}},
+        payment_intent_data=payment_intent_data,
         success_url=f"{root}{reverse('checkout_success')}?session_id={{CHECKOUT_SESSION_ID}}",
         cancel_url=_checkout_cancel_url(request, action.page),
     )

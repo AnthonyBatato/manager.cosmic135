@@ -20,6 +20,11 @@ class Offer(models.Model):
     stripe_price_id = models.CharField(max_length=120, blank=True)
     stripe_test_price_id = models.CharField(max_length=120, blank=True)
     stripe_live_price_id = models.CharField(max_length=120, blank=True)
+    stripe_payment_description = models.CharField(
+        max_length=250,
+        blank=True,
+        help_text="Optional description for payments created by Manager. Stripe Payment Links use their own settings.",
+    )
     stripe_test_payment_link_id = models.CharField(max_length=120, blank=True)
     stripe_test_payment_link_url = models.URLField(blank=True)
     stripe_live_payment_link_id = models.CharField(max_length=120, blank=True)

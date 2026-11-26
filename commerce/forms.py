@@ -9,6 +9,7 @@ class OfferForm(forms.ModelForm):
         model = Offer
         fields = [
             "name", "currency", "stripe_test_price_id", "stripe_live_price_id",
+            "stripe_payment_description",
             "stripe_test_payment_link_id", "stripe_test_payment_link_url",
             "stripe_live_payment_link_id", "stripe_live_payment_link_url",
             "thank_you_page",

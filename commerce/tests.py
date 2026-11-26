@@ -357,6 +357,23 @@ class StripeCheckoutFlowTests(TestCase):
         self.assertEqual(kwargs["cancel_url"], "https://sales-page.go.example.com/?checkout=cancelled")
         attempt = CheckoutAttempt.objects.get(stripe_session_id="cs_test_created")
         self.assertEqual(attempt.stripe_mode, "test")
+        self.assertNotIn("description", kwargs["payment_intent_data"])
+
+    @override_settings(STRIPE_MODE="test", STRIPE_SECRET_KEY="sk_test_private")
+    @patch("commerce.views.stripe.checkout.Session.create")
+    def test_checkout_passes_offer_payment_description_and_keeps_metadata(self, create_session):
+        create_session.return_value = SimpleNamespace(id="cs_test_described", url="https://checkout.stripe.test/session")
+        self.offer.stripe_payment_description = "數字解碼 × 數靈啟示牌工作坊 (2人)"
+        self.offer.save(update_fields=["stripe_payment_description"])
+
+        response = self.client.get(reverse("checkout_start", args=[self.action.pk]))
+
+        self.assertEqual(response.status_code, 302)
+        attempt = CheckoutAttempt.objects.get(stripe_session_id="cs_test_described")
+        self.assertEqual(create_session.call_args.kwargs["payment_intent_data"], {
+            "description": self.offer.stripe_payment_description,
+            "metadata": {"attempt_id": str(attempt.pk), "offer_id": str(self.offer.pk)},
+        })
 
     @override_settings(STRIPE_MODE="test", STRIPE_SECRET_KEY="sk_test_private")
     @patch("commerce.views.stripe.checkout.Session.create")
