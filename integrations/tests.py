@@ -54,6 +54,73 @@ class FormCallbackTests(TestCase):
         self.assertEqual(self.journey.status, Journey.STATUS_COMPLETED)
 
 
+@override_settings(COSMIC_TOOLS_INTEGRATION_SECRET="shared-test-secret")
+class ManualPaymentApiTests(TestCase):
+    def setUp(self):
+        self.page = LandingPage.objects.create(name="Published", slug="published", is_published=True)
+        self.offer = Offer.objects.create(
+            name="Taipei Duo", cosmic_tools_course_id=42, registration_quantity=2,
+            post_payment_email=Offer.EMAIL_BOTH, currency="TWD",
+        )
+        ActionMapping.objects.create(
+            page=self.page, key="checkout", label="Buy", action_type="checkout", target_id=self.offer.pk,
+        )
+
+    def signed_request(self, method="get", data=None, secret="shared-test-secret"):
+        raw = json.dumps(data or {}, separators=(",", ":")).encode() if method == "post" else b""
+        stamp = str(int(time.time()))
+        signature = hmac.new(secret.encode(), stamp.encode() + b"." + raw, hashlib.sha256).hexdigest()
+        request_method = getattr(self.client, method)
+        kwargs = {
+            "HTTP_X_COSMIC_TIMESTAMP": stamp,
+            "HTTP_X_COSMIC_SIGNATURE": f"sha256={signature}",
+        }
+        if method == "post":
+            kwargs.update({"data": raw, "content_type": "application/json"})
+        return request_method(reverse("integration_manual_payments"), **kwargs)
+
+    def test_tools_can_list_registration_offers(self):
+        response = self.signed_request()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["offers"], [{
+            "id": self.offer.pk,
+            "name": "Taipei Duo",
+            "course_id": 42,
+            "registration_quantity": 2,
+            "currency": "TWD",
+        }])
+
+    @patch("integrations.tasks.provision_cosmic_tools_registration.delay")
+    def test_tools_can_create_one_idempotent_manual_journey(self, provision):
+        payload = {
+            "offer_id": self.offer.pk,
+            "customer_name": "Manual Buyer",
+            "customer_email": "buyer@example.com",
+            "customer_phone": "+886900000000",
+            "amount_minor": 738000,
+            "submission_token": "5f3e96ac-6fb0-41a3-b09c-e3aa96ca716f",
+            "note": "Payment received before automation",
+        }
+
+        with self.captureOnCommitCallbacks(execute=True):
+            first = self.signed_request("post", payload)
+        with self.captureOnCommitCallbacks(execute=True):
+            duplicate = self.signed_request("post", payload)
+
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(duplicate.status_code, 200)
+        self.assertTrue(first.json()["created"])
+        self.assertFalse(duplicate.json()["created"])
+        self.assertEqual(Journey.objects.count(), 1)
+        journey = Journey.objects.get()
+        self.assertEqual(journey.registration_quantity, 2)
+        self.assertEqual(journey.payment.amount_total, 738000)
+        provision.assert_called_once_with(journey.pk)
+
+    def test_tools_api_rejects_unsigned_request(self):
+        self.assertEqual(self.client.get(reverse("integration_manual_payments")).status_code, 401)
+
 class CosmicToolsProvisioningTests(TestCase):
     def setUp(self):
         page = LandingPage.objects.create(name="Course page", slug="course-page")
