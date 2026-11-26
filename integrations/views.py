@@ -88,11 +88,15 @@ def manual_payments(request):
         return JsonResponse({"error": "Invalid or expired signature"}, status=401)
 
     if request.method == "GET":
-        offers = Offer.objects.filter(
+        offer_queryset = Offer.objects.filter(
             active=True,
             cosmic_tools_course_id__isnull=False,
             post_payment_email__in=[Offer.EMAIL_REGISTRATION, Offer.EMAIL_BOTH],
         ).order_by("name")
+        offers = [
+            offer for offer in offer_queryset
+            if offer.stripe_price_for_mode(settings.STRIPE_MODE)
+        ]
         return JsonResponse({
             "offers": [
                 {

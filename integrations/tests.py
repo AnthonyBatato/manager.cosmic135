@@ -60,7 +60,7 @@ class ManualPaymentApiTests(TestCase):
         self.page = LandingPage.objects.create(name="Published", slug="published", is_published=True)
         self.offer = Offer.objects.create(
             name="Taipei Duo", cosmic_tools_course_id=42, registration_quantity=2,
-            post_payment_email=Offer.EMAIL_BOTH, currency="TWD",
+            post_payment_email=Offer.EMAIL_BOTH, currency="TWD", stripe_test_price_id="price_test_duo",
         )
         ActionMapping.objects.create(
             page=self.page, key="checkout", label="Buy", action_type="checkout", target_id=self.offer.pk,
