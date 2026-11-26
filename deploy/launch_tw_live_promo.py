@@ -13,7 +13,7 @@ from pages.services import save_uploaded_version
 
 PROMO_KEY = "tw-live-bogo-2026"
 PAGE_ZIP = "/tmp/workshop-tw-live-upload.zip"
-STARTS_AT = datetime(2026, 11, 26, 20, 30, tzinfo=ZoneInfo("Asia/Taipei"))
+STARTS_AT = datetime(2026, 11, 26, 20, 0, tzinfo=ZoneInfo("Asia/Taipei"))
 
 
 def find_product(api_key):

@@ -197,8 +197,8 @@ def checkout_start(request, action_id):
             "title": "優惠尚未開始",
             "title_zh": "優惠尚未開始",
             "title_en": "Offer not started",
-            "detail_zh": "直播限定優惠將於 2026年11月26日晚上8時30分開放。",
-            "detail_en": "This livestream offer opens at 8:30 PM on 26 November 2026.",
+            "detail_zh": "直播限定優惠將於 2026年11月26日晚上8時開放。",
+            "detail_en": "This livestream offer opens at 8:00 PM on 26 November 2026.",
         }, status=409)
     if offer.sales_end_at and now >= offer.sales_end_at:
         return render(request, "commerce/offer_unavailable.html", {
