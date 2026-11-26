@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import timedelta
 import tempfile
+import uuid
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 import stripe
@@ -283,6 +284,56 @@ class StripeCheckoutFlowTests(TestCase):
 
     def test_tw_live_sold_out_preview_requires_owner_login(self):
         response = self.client.get(reverse("tw_live_sold_out_preview"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("account_login"), response["Location"])
+
+    @patch("integrations.tasks.provision_cosmic_tools_registration.delay")
+    def test_owner_can_record_manual_duo_payment_once(self, provision):
+        owner = get_user_model().objects.create_superuser(
+            username="manual-owner", email="manual-owner@example.com", password="test-password",
+        )
+        self.client.force_login(owner)
+        self.offer.cosmic_tools_course_id = 42
+        self.offer.registration_quantity = 2
+        self.offer.currency = "TWD"
+        self.offer.save(update_fields=["cosmic_tools_course_id", "registration_quantity", "currency"])
+        submission_token = uuid.uuid4()
+        payload = {
+            "offer": self.offer.pk,
+            "customer_name": "Paid Customer",
+            "customer_email": "PAID@example.com",
+            "customer_phone": "+60123456789",
+            "amount": "7380.00",
+            "payment_note": "Paid before automation",
+            "payment_confirmed": "on",
+            "submission_token": str(submission_token),
+        }
+
+        with self.captureOnCommitCallbacks(execute=True):
+            first = self.client.post(reverse("manual_payment_create"), payload)
+
+        journey = Journey.objects.get()
+        self.assertRedirects(first, reverse("manual_payment_detail", args=[journey.pk]))
+        self.assertEqual(journey.registration_quantity, 2)
+        self.assertEqual(journey.registration_link_status, "pending")
+        self.assertEqual(journey.customer.email, "paid@example.com")
+        self.assertEqual(journey.payment.amount_total, 738000)
+        self.assertEqual(journey.payment.currency, "twd")
+        self.assertEqual(journey.payment.source, Payment.SOURCE_MANUAL)
+        self.assertEqual(journey.payment.manual_note, "Paid before automation")
+        provision.assert_called_once_with(journey.pk)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            duplicate = self.client.post(reverse("manual_payment_create"), payload)
+
+        self.assertRedirects(duplicate, reverse("manual_payment_detail", args=[journey.pk]))
+        self.assertEqual(Payment.objects.count(), 1)
+        self.assertEqual(Journey.objects.count(), 1)
+        provision.assert_called_once_with(journey.pk)
+
+    def test_manual_payment_workflow_requires_owner_login(self):
+        response = self.client.get(reverse("manual_payment_create"))
 
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse("account_login"), response["Location"])

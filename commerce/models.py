@@ -1,4 +1,6 @@
 import secrets
+from decimal import Decimal
+
 from django.db import models
 from django.utils import timezone
 
@@ -100,12 +102,21 @@ class CheckoutAttempt(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
 class Payment(models.Model):
+    SOURCE_STRIPE = "stripe"
+    SOURCE_MANUAL = "manual"
+    SOURCE_CHOICES = [(SOURCE_STRIPE, "Stripe"), (SOURCE_MANUAL, "Manual payment")]
     attempt = models.OneToOneField(CheckoutAttempt, on_delete=models.CASCADE)
     stripe_payment_intent_id = models.CharField(max_length=255, blank=True)
     amount_total = models.PositiveIntegerField(default=0)
     currency = models.CharField(max_length=3, default="myr")
+    source = models.CharField(max_length=16, choices=SOURCE_CHOICES, default=SOURCE_STRIPE)
+    manual_note = models.CharField(max_length=250, blank=True)
     status = models.CharField(max_length=32, default="paid")
     paid_at = models.DateTimeField(default=timezone.now)
+
+    @property
+    def amount_major(self):
+        return Decimal(self.amount_total) / Decimal("100")
 
 class StripeEvent(models.Model):
     event_id = models.CharField(max_length=255, unique=True)

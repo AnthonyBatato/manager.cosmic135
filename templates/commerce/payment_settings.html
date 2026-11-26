@@ -3,7 +3,7 @@
 {% block content %}
 <header class="topbar payment-header">
   <div><p class="eyebrow">STRIPE</p><h1>{% trans "Payments" %}</h1><p>{% trans "Connect each landing-page checkout button to a Stripe Price." %}</p></div>
-  <a class="button primary" href="{% url 'offer_create' %}">{% trans "New offer" %}</a>
+  <div class="actions"><a class="button secondary" href="{% url 'manual_payment_create' %}">{% trans "Manual paid customer" %}</a><a class="button primary" href="{% url 'offer_create' %}">{% trans "New offer" %}</a></div>
 </header>
 <div class="integration-grid">
   <section class="panel integration-card">

@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% load i18n %}
+{% block title %}Manual paid customer · Cosmic Launch{% endblock %}
+{% block content %}
+<header class="compact-header"><a class="back" href="{% url 'payment_settings' %}">← {% trans "Payments" %}</a><p class="eyebrow">MANUAL PAYMENT</p><h1>Send registration email manually</h1><p>Use this for a payment received before the Stripe automation. The selected offer controls the email template and whether one or two participant registration links are created.</p></header>
+<form method="post" class="panel form-panel offer-form">{% csrf_token %}
+  {{ form.non_field_errors }}
+  {% for field in form %}{% if not field.is_hidden %}<label>{{ field.label }}{{ field }}{% if field.help_text %}<small class="muted">{{ field.help_text }}</small>{% endif %}{{ field.errors }}</label>{% else %}{{ field }}{% endif %}{% endfor %}
+  <div class="alert"><strong>Before submitting</strong><br>Confirm the payment in your bank or previous payment system. This action creates a paid journey, requests the personal Cosmic Tools registration link(s), and queues the bilingual customer email.</div>
+  <button class="button primary" type="submit">Record payment and prepare email</button>
+</form>
+{% endblock %}

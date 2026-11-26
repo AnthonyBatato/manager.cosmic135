@@ -1,5 +1,7 @@
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
+from pages.models import ActionMapping
 from .models import CheckoutAttempt, Customer, Journey, Payment, StripeEvent
 
 def _event_payment_intent(event):
@@ -45,6 +47,78 @@ def _mark_refunded(payment):
         journey.save(update_fields=["status", "completion_source"])
         from automations.services import cancel_journey_emails
         cancel_journey_emails(journey)
+
+
+@transaction.atomic
+def create_manual_payment(*, offer, customer_name, customer_email, customer_phone, amount_total, submission_token, note=""):
+    """Create the same journey as a paid Stripe checkout without fabricating a Stripe event."""
+    manual_reference = f"manual_{submission_token}"
+    existing_attempt = CheckoutAttempt.objects.select_for_update().filter(
+        stripe_session_id=manual_reference,
+    ).first()
+    if existing_attempt:
+        return Journey.objects.get(payment__attempt=existing_attempt), False
+
+    action = ActionMapping.objects.select_related("page", "page__published_version").filter(
+        action_type=ActionMapping.ACTION_CHECKOUT,
+        target_id=offer.pk,
+        enabled=True,
+        page__is_published=True,
+    ).order_by("pk").first()
+    if not action:
+        raise ValueError("This offer is not mapped to an enabled checkout action on a published landing page.")
+
+    email = customer_email.strip().lower()
+    customer, created_customer = Customer.objects.get_or_create(
+        email=email,
+        defaults={"name": customer_name.strip(), "phone": customer_phone.strip()},
+    )
+    if not created_customer:
+        changed = []
+        if customer_name.strip() and customer.name != customer_name.strip():
+            customer.name = customer_name.strip()
+            changed.append("name")
+        if customer_phone.strip() and customer.phone != customer_phone.strip():
+            customer.phone = customer_phone.strip()
+            changed.append("phone")
+        if changed:
+            customer.save(update_fields=[*changed, "updated_at"])
+
+    attempt = CheckoutAttempt.objects.create(
+        page=action.page,
+        page_version=action.page.published_version,
+        action=action,
+        offer=offer,
+        customer=customer,
+        stripe_session_id=manual_reference,
+        stripe_mode=settings.STRIPE_MODE,
+        status=CheckoutAttempt.STATUS_PAID,
+    )
+    payment = Payment.objects.create(
+        attempt=attempt,
+        stripe_payment_intent_id=f"manual:{submission_token}",
+        amount_total=amount_total,
+        currency=offer.currency.lower(),
+        source=Payment.SOURCE_MANUAL,
+        manual_note=note.strip(),
+    )
+    journey = Journey.objects.create(
+        payment=payment,
+        customer=customer,
+        destination_type=offer.destination_type,
+        destination_id=offer.destination_id,
+        destination_url="" if offer.cosmic_tools_course_id else offer.destination_url,
+        cosmic_tools_course_id=offer.cosmic_tools_course_id,
+        registration_quantity=offer.registration_quantity,
+        registration_link_status="pending" if offer.cosmic_tools_course_id else "not_required",
+    )
+    if journey.cosmic_tools_course_id:
+        from integrations.tasks import provision_cosmic_tools_registration
+        transaction.on_commit(lambda pk=journey.pk: provision_cosmic_tools_registration.delay(pk))
+    else:
+        from automations.services import schedule_journey_emails
+        schedule_journey_emails(journey)
+    return journey, True
 
 @transaction.atomic
 def process_checkout_event(event_record):
