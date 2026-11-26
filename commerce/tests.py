@@ -1,5 +1,6 @@
 from pathlib import Path
 from datetime import timedelta
+import importlib
 import tempfile
 import uuid
 from types import SimpleNamespace
@@ -635,6 +636,38 @@ class PostPaymentEmailTests(TestCase):
         self.assertIn("付款已确认", subject)
         self.assertIn("参加者 1：https://tools.example/one/", body)
         self.assertIn("Participant 2: https://tools.example/two/", body)
+
+    def test_latest_tw_registration_email_greets_customer_and_renders_duo_links(self):
+        migration = importlib.import_module("commerce.migrations.0013_update_tw_registration_email")
+        template = EmailTemplate.objects.create(
+            name="Default", kind="action_request",
+            subject_en="Payment confirmed", subject_zh="Default",
+            body_en="English body", body_zh="Default body",
+        )
+        offer = Offer.objects.create(
+            name="Workshop (TW) Duo",
+            email_subject_zh=migration.SUBJECT_ZH,
+            email_body_zh=migration.BODY_ZH,
+        )
+        customer = SimpleNamespace(name="王小明")
+        links = [
+            SimpleNamespace(registration_url="https://tools.example/one/"),
+            SimpleNamespace(registration_url="https://tools.example/two/"),
+        ]
+
+        subject, body = render_bilingual(
+            template,
+            Context({"customer": customer, "registration_links": links, "action_url": "https://fallback.example/"}),
+            offer=offer,
+        )
+
+        self.assertIn("報名確認成功", subject)
+        self.assertIn("王小明 您好", body)
+        self.assertIn("參加者 1：\nhttps://tools.example/one/", body)
+        self.assertIn("參加者 2：\nhttps://tools.example/two/", body)
+        self.assertIn("上午 9:31", body)
+        self.assertIn("https://line.me/ti/p/ry-GMvJ6tk", body)
+        self.assertNotIn("**", body)
 
     def test_offer_specific_reminder_follows_event_email_format(self):
         template = EmailTemplate.objects.create(
