@@ -1,6 +1,5 @@
 from django import forms
 from django.core.exceptions import ValidationError
-import uuid
 
 from .models import Offer
 
@@ -82,34 +81,3 @@ class OfferForm(forms.ModelForm):
         ):
             self.add_error("max_completed_orders", "Limited offers require a Stripe Payment Link ID.")
         return cleaned
-
-
-class ManualPaymentForm(forms.Form):
-    offer = forms.ModelChoiceField(
-        queryset=Offer.objects.none(),
-        label="Offer / email configuration",
-        help_text="Choose Single, Duo, or the applicable event offer. The offer controls how many registration links are created.",
-    )
-    customer_name = forms.CharField(max_length=160, label="Customer name")
-    customer_email = forms.EmailField(label="Customer email")
-    customer_phone = forms.CharField(max_length=40, required=False, label="Phone / WhatsApp")
-    amount = forms.DecimalField(
-        max_digits=10, decimal_places=2, min_value=0.01,
-        label="Amount already received",
-        help_text="Enter the amount in the selected offer's currency, for example 3980.00.",
-    )
-    payment_note = forms.CharField(
-        max_length=250, required=False, label="Internal payment note",
-        help_text="Optional reference such as bank transfer date or receipt number. This is not included in the customer email.",
-    )
-    payment_confirmed = forms.BooleanField(
-        label="I confirm that this payment was already received",
-        help_text="Submitting creates a paid customer journey and queues the registration email.",
-    )
-    submission_token = forms.UUIDField(widget=forms.HiddenInput)
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["offer"].queryset = Offer.objects.filter(active=True).order_by("name")
-        if not self.is_bound:
-            self.initial.setdefault("submission_token", uuid.uuid4())

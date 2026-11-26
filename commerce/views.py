@@ -16,9 +16,8 @@ from pages.models import ActionMapping, Domain, DomainRoute
 from pages.services import render_builder, serve_file_path
 from pages.tracking import purchase_tracking_markup
 from users.auth import owner_required
-from .forms import ManualPaymentForm, OfferForm
+from .forms import OfferForm
 from .models import CheckoutAttempt, Journey, Offer, StripeEvent
-from .services import create_manual_payment
 from .tasks import process_stripe_event
 
 
@@ -159,43 +158,6 @@ def offer_edit(request, pk):
         messages.success(request, "Stripe offer saved.")
         return redirect("offer_edit", pk=offer.pk)
     return render(request, "commerce/offer_form.html", {"form": form, "offer": offer})
-
-
-@owner_required
-def manual_payment_create(request):
-    form = ManualPaymentForm(request.POST or None)
-    if request.method == "POST" and form.is_valid():
-        try:
-            journey, created = create_manual_payment(
-                offer=form.cleaned_data["offer"],
-                customer_name=form.cleaned_data["customer_name"],
-                customer_email=form.cleaned_data["customer_email"],
-                customer_phone=form.cleaned_data["customer_phone"],
-                amount_total=int(form.cleaned_data["amount"] * 100),
-                submission_token=form.cleaned_data["submission_token"],
-                note=form.cleaned_data["payment_note"],
-            )
-        except ValueError as exc:
-            form.add_error("offer", str(exc))
-        else:
-            if created:
-                messages.success(request, "Manual payment recorded. The registration email is being prepared.")
-            else:
-                messages.info(request, "This manual payment was already submitted; no duplicate email was created.")
-            return redirect("manual_payment_detail", pk=journey.pk)
-    return render(request, "commerce/manual_payment_form.html", {"form": form})
-
-
-@owner_required
-def manual_payment_detail(request, pk):
-    journey = get_object_or_404(
-        Journey.objects.select_related("customer", "payment__attempt__offer").prefetch_related(
-            "registration_seats", "emails",
-        ),
-        pk=pk,
-        payment__source="manual",
-    )
-    return render(request, "commerce/manual_payment_detail.html", {"journey": journey})
 
 
 def _checkout_cancel_url(request, page):

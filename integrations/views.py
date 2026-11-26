@@ -4,6 +4,7 @@ import json
 import time
 import uuid
 from datetime import datetime
+import stripe
 from django.conf import settings
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
@@ -113,20 +114,28 @@ def manual_payments(request):
     try:
         data = json.loads(request.body)
         offer_id = int(data["offer_id"])
-        amount_minor = int(data["amount_minor"])
-        if amount_minor <= 0:
-            raise ValueError("Amount must be positive")
         submission_token = uuid.UUID(str(data["submission_token"]))
         customer_name = str(data["customer_name"]).strip()
         customer_email = str(data["customer_email"]).strip().lower()
         customer_phone = str(data.get("customer_phone", "")).strip()
-        note = str(data.get("note", "")).strip()
-        if not customer_name or len(customer_name) > 160 or len(customer_phone) > 40 or len(note) > 250:
+        if not customer_name or len(customer_name) > 160 or len(customer_phone) > 40:
             raise ValueError("Invalid customer details")
         validate_email(customer_email)
         offer = Offer.objects.get(pk=offer_id, active=True, cosmic_tools_course_id__isnull=False)
     except (KeyError, TypeError, ValueError, ValidationError, json.JSONDecodeError, Offer.DoesNotExist):
         return JsonResponse({"error": "Invalid manual payment payload"}, status=400)
+
+    price_id = offer.stripe_price_for_mode(settings.STRIPE_MODE)
+    if not settings.STRIPE_SECRET_KEY or not price_id:
+        return JsonResponse({"error": "The selected offer is not configured for the active Stripe mode."}, status=409)
+    try:
+        stripe.api_key = settings.STRIPE_SECRET_KEY
+        stripe_price = stripe.Price.retrieve(price_id)
+        amount_minor = int(stripe_price.unit_amount)
+        if amount_minor <= 0:
+            raise ValueError("Stripe Price has no fixed positive amount")
+    except (stripe.StripeError, TypeError, ValueError, AttributeError):
+        return JsonResponse({"error": "Could not read the selected offer amount from Stripe."}, status=502)
 
     try:
         journey, created = create_manual_payment(
@@ -136,7 +145,7 @@ def manual_payments(request):
             customer_phone=customer_phone,
             amount_total=amount_minor,
             submission_token=submission_token,
-            note=note,
+            note="Created from Cosmic Tools paid registration email screen.",
         )
     except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=409)

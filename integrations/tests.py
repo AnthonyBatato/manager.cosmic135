@@ -54,7 +54,11 @@ class FormCallbackTests(TestCase):
         self.assertEqual(self.journey.status, Journey.STATUS_COMPLETED)
 
 
-@override_settings(COSMIC_TOOLS_INTEGRATION_SECRET="shared-test-secret")
+@override_settings(
+    COSMIC_TOOLS_INTEGRATION_SECRET="shared-test-secret",
+    STRIPE_MODE="test",
+    STRIPE_SECRET_KEY="sk_test_private",
+)
 class ManualPaymentApiTests(TestCase):
     def setUp(self):
         self.page = LandingPage.objects.create(name="Published", slug="published", is_published=True)
@@ -91,16 +95,16 @@ class ManualPaymentApiTests(TestCase):
             "currency": "TWD",
         }])
 
+    @patch("integrations.views.stripe.Price.retrieve")
     @patch("integrations.tasks.provision_cosmic_tools_registration.delay")
-    def test_tools_can_create_one_idempotent_manual_journey(self, provision):
+    def test_tools_can_create_one_idempotent_manual_journey(self, provision, retrieve_price):
+        retrieve_price.return_value.unit_amount = 738000
         payload = {
             "offer_id": self.offer.pk,
             "customer_name": "Manual Buyer",
             "customer_email": "buyer@example.com",
             "customer_phone": "+886900000000",
-            "amount_minor": 738000,
             "submission_token": "5f3e96ac-6fb0-41a3-b09c-e3aa96ca716f",
-            "note": "Payment received before automation",
         }
 
         with self.captureOnCommitCallbacks(execute=True):
@@ -116,6 +120,7 @@ class ManualPaymentApiTests(TestCase):
         journey = Journey.objects.get()
         self.assertEqual(journey.registration_quantity, 2)
         self.assertEqual(journey.payment.amount_total, 738000)
+        self.assertEqual(retrieve_price.call_count, 2)
         provision.assert_called_once_with(journey.pk)
 
     def test_tools_api_rejects_unsigned_request(self):
